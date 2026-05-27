@@ -1,0 +1,22 @@
+{
+  "name": "flower-shop-bot",
+  "version": "1.0.0",
+  "description": "Цэцгийн дэлгүүрийн 24/7 автомат систем — Messenger + Discord + Sheets",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "google-spreadsheet": "^4.1.4",
+    "google-auth-library": "^9.15.0",
+    "node-cron": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
