@@ -25,11 +25,21 @@ export async function startDiscord() {
   client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'report') {
-      await interaction.deferReply();
-      const r = await getDailyReport();
-      await interaction.editReply({ embeds: [dailyEmbed(r)] });
+      try {
+        await interaction.deferReply();
+        const r = await getDailyReport();
+        await interaction.editReply({ embeds: [dailyEmbed(r)] });
+      } catch (err) {
+        console.error('Report command error:', err);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: '⚠️ Тайлан авахад алдаа гарлаа. Дахин оролдоно уу.', ephemeral: true }).catch(() => {});
+        }
+      }
     }
   });
+
+  // Unhandled error-уудыг барих
+  client.on('error', (err) => console.error('Discord client error:', err));
 
   await client.login(process.env.DISCORD_BOT_TOKEN);
 }
