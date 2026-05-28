@@ -130,6 +130,26 @@ export async function getSalaryReport(from, to) {
   return { from, to, workers: result };
 }
 
+// Өдрийн хаалт хадгалах
+export async function saveHaalt(data) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Өдрийн хаалт'];
+  if (!sheet) return;
+  const today = new Date().toISOString().slice(0, 10);
+  await sheet.addRow({
+    'Огноо':        today,
+    'Ажилтан':      data.name,
+    'Баглаа':       data.baglaa || '',
+    'Нийт орлого':  data.niit,
+    'Бэлэн':        data.belen,
+    'Данс':         data.dans,
+    'Пос':          data.pos,
+    'Зарлага':      data.zarlaga || '',
+    'Зарлага нийт': data.zarlTotal,
+    'Цэвэр орлого': data.tsever,
+  });
+}
+
 // Цалин Sheets-д хадгалах
 export async function saveSalaryToSheet(from, to, workers, directors) {
   const d = await ensureLoaded();

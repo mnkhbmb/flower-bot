@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
-import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport } from './sheets.js';
+import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet } from './sheets.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -27,6 +27,10 @@ const commands = [
         { name: '🔴 Гарлаа', value: 'out' },
       ))
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('haalt')
+    .setDescription('Өдрийн хаалт оруулах')
+    .toJSON(),
 ];
 
 export async function startDiscord() {
@@ -38,8 +42,65 @@ export async function startDiscord() {
 
   client.once('ready', () => console.log(`✅ Discord bot: ${client.user.tag}`));
 
-  // Командуудыг хариулах
+  // Командууд болон modal submit хариулах
   client.on('interactionCreate', async (interaction) => {
+
+    // /haalt modal submit
+    if (interaction.isModalSubmit() && interaction.customId === 'haalt_modal') {
+      try {
+        await interaction.deferReply();
+        const name = interaction.user.displayName || interaction.user.username;
+        const baglaa   = interaction.fields.getTextInputValue('baglaa');
+        const niit     = Number(interaction.fields.getTextInputValue('niit').replace(/[^\d]/g, '')) || 0;
+        const belen    = Number(interaction.fields.getTextInputValue('belen').replace(/[^\d]/g, '')) || 0;
+        const dansPosRaw = interaction.fields.getTextInputValue('dans_pos');
+        const zarlaga  = interaction.fields.getTextInputValue('zarlaga');
+
+        // Данс | Пос задлах
+        const [dansStr, posStr] = dansPosRaw.split('|').map(s => s.trim());
+        const dans = Number(dansStr?.replace(/[^\d]/g, '')) || 0;
+        const pos  = Number(posStr?.replace(/[^\d]/g, ''))  || 0;
+
+        // Зарлагын нийт тооцох
+        const zarlLines = zarlaga.split('\n').filter(l => l.trim());
+        const zarlTotal = zarlLines.reduce((sum, line) => {
+          const match = line.match(/(\d+)/);
+          return sum + (match ? Number(match[1]) : 0);
+        }, 0);
+
+        const tsever = niit - zarlTotal;
+
+        // Sheets-д хадгалах
+        await saveHaalt({ name, baglaa, niit, belen, dans, pos, zarlaga, zarlTotal, tsever });
+
+        // #өдрийн-хаалт руу илгээх
+        const channel = await client.channels.fetch(process.env.DISCORD_HAALT_CHANNEL_ID);
+        await channel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x5865F2)
+              .setTitle(`📋 Өдрийн хаалт — ${name}`)
+              .addFields(
+                { name: '📦 Баглаа', value: baglaa || '—', inline: false },
+                { name: '💰 Нийт орлого', value: `${niit.toLocaleString()}₮`, inline: true },
+                { name: '💵 Бэлэн', value: `${belen.toLocaleString()}₮`, inline: true },
+                { name: '🏦 Данс | Пос', value: `${dans.toLocaleString()}₮ | ${pos.toLocaleString()}₮`, inline: true },
+                { name: '🧾 Зарлага', value: zarlaga || '—', inline: false },
+                { name: '📊 Зарлага нийт', value: `${zarlTotal.toLocaleString()}₮`, inline: true },
+                { name: '✅ Цэвэр орлого', value: `**${tsever.toLocaleString()}₮**`, inline: true },
+              )
+              .setTimestamp()
+          ]
+        });
+
+        await interaction.editReply({ content: '✅ Өдрийн хаалт бүртгэгдлээ!' });
+      } catch (err) {
+        console.error('Haalt modal error:', err);
+        await interaction.editReply({ content: '⚠️ Хаалт бүртгэхэд алдаа гарлаа.' }).catch(() => {});
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     // /report
@@ -54,6 +115,59 @@ export async function startDiscord() {
           await interaction.reply({ content: '⚠️ Тайлан авахад алдаа гарлаа.', ephemeral: true }).catch(() => {});
         }
       }
+    }
+
+    // /haalt — modal нээх
+    if (interaction.commandName === 'haalt') {
+      const modal = new ModalBuilder()
+        .setCustomId('haalt_modal')
+        .setTitle('Өдрийн хаалт');
+
+      const baglaaInput = new TextInputBuilder()
+        .setCustomId('baglaa')
+        .setLabel('Баглаа тэмдэглэл')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('1. Са-3 Ро-2 /Б/\n2. Уг-5 /П/')
+        .setRequired(false);
+
+      const niitInput = new TextInputBuilder()
+        .setCustomId('niit')
+        .setLabel('Нийт орлого')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('632500')
+        .setRequired(true);
+
+      const belenInput = new TextInputBuilder()
+        .setCustomId('belen')
+        .setLabel('Бэлэн')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('149500')
+        .setRequired(false);
+
+      const dansPosInput = new TextInputBuilder()
+        .setCustomId('dans_pos')
+        .setLabel('Данс | Пос  (|  -р тусгаарлана)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('433000 | 50000')
+        .setRequired(false);
+
+      const zarlagaInput = new TextInputBuilder()
+        .setCustomId('zarlaga')
+        .setLabel('Зарлага')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('1. 50000 Амина хоол\n2. 20000 хогийн уут')
+        .setRequired(false);
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(baglaaInput),
+        new ActionRowBuilder().addComponents(niitInput),
+        new ActionRowBuilder().addComponents(belenInput),
+        new ActionRowBuilder().addComponents(dansPosInput),
+        new ActionRowBuilder().addComponents(zarlagaInput),
+      );
+
+      await interaction.showModal(modal);
+      return;
     }
 
     // /irts
