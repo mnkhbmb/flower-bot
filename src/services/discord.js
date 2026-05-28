@@ -47,7 +47,7 @@ export async function startDiscord() {
     );
     console.log('✅ Командууд бүртгэгдлээ');
   } catch (err) {
-    console.error('❌ Discord команд бүртгэх алдаа:', err.message);
+    console.error('❌ Discord команд бүртгэх алдаа:', err.message, err.status, err.code);
   }
 
   client.once('ready', () => console.log(`✅ Discord bot: ${client.user.tag}`));
@@ -285,10 +285,11 @@ export async function startDiscord() {
   client.on('error', (err) => console.error('Discord client error:', err));
 
   try {
+    console.log('🔄 Discord login хийж байна...');
     await client.login(process.env.DISCORD_BOT_TOKEN);
     console.log('✅ Discord login амжилттай');
   } catch (err) {
-    console.error('❌ Discord login алдаа:', err.message);
+    console.error('❌ Discord login алдаа:', err.message, err.code);
   }
 }
 
