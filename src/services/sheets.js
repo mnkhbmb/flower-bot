@@ -53,6 +53,116 @@ export async function addOrder(order) {
   return { ...order, orderId, date: today };
 }
 
+// Ирц бүртгэх
+export async function logAttendance(name, type) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Ирц'];
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const time = now.toLocaleTimeString('mn-MN', { timeZone: 'Asia/Ulaanbaatar', hour: '2-digit', minute: '2-digit' });
+
+  if (type === 'in') {
+    await sheet.addRow({
+      'Огноо': date,
+      'Ажилтан': name,
+      'Ирсэн цаг': time,
+      'Гарсан цаг': '',
+      'Тэмдэглэл': '',
+    });
+  } else {
+    // Гарсан цагийг мөн өдрийн сүүлийн мөрд бичнэ
+    const rows = await sheet.getRows();
+    const todayRows = rows.filter(r => r.get('Огноо') === date && r.get('Ажилтан') === name && !r.get('Гарсан цаг'));
+    if (todayRows.length > 0) {
+      const last = todayRows[todayRows.length - 1];
+      last.set('Гарсан цаг', time);
+      await last.save();
+    } else {
+      await sheet.addRow({
+        'Огноо': date,
+        'Ажилтан': name,
+        'Ирсэн цаг': '',
+        'Гарсан цаг': time,
+        'Тэмдэглэл': 'Ирсэн цаг бүртгэгдээгүй',
+      });
+    }
+  }
+  return { name, type, time, date };
+}
+
+// Цалингийн тооцоо
+export async function getSalaryReport(from, to) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Ирц'];
+  const rows = await sheet.getRows();
+
+  const DAILY_RATE = 71500;
+  const WORKERS = ['Туяа', 'Амина'];
+
+  const result = {};
+  for (const name of WORKERS) {
+    // Тухайн хугацааны ирсэн + гарсан бүртгэлтэй өдрүүдийг тоолно
+    const days = rows.filter(r => {
+      const date = r.get('Огноо');
+      return r.get('Ажилтан') === name &&
+        r.get('Ирсэн цаг') &&
+        r.get('Гарсан цаг') &&
+        date >= from &&
+        date <= to;
+    });
+
+    // Нийт цаг тооцох
+    let totalMinutes = 0;
+    for (const r of days) {
+      const inTime = r.get('Ирсэн цаг');
+      const outTime = r.get('Гарсан цаг');
+      if (inTime && outTime) {
+        const [inH, inM] = inTime.split(':').map(Number);
+        const [outH, outM] = outTime.split(':').map(Number);
+        totalMinutes += (outH * 60 + outM) - (inH * 60 + inM);
+      }
+    }
+
+    const totalHours = (totalMinutes / 60).toFixed(1);
+    const salary = days.length * DAILY_RATE;
+    result[name] = { days: days.length, hours: totalHours, salary };
+  }
+  return { from, to, workers: result };
+}
+
+// Цалин Sheets-д хадгалах
+export async function saveSalaryToSheet(from, to, workers, directors) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Цалин'];
+  if (!sheet) return;
+
+  const period = `${from} ~ ${to}`;
+
+  // Ажилтнуудын цалин
+  for (const [name, data] of Object.entries(workers)) {
+    await sheet.addRow({
+      'Хугацаа': period,
+      'Нэр': name,
+      'Төрөл': 'Ажилтан',
+      'Өдөр': data.days,
+      'Цаг': data.hours,
+      'Дүн': data.salary,
+    });
+  }
+
+  // Захирлуудын цалин
+  for (const dir of directors) {
+    await sheet.addRow({
+      'Хугацаа': period,
+      'Нэр': dir.name,
+      'Төрөл': 'Захирал',
+      'Өдөр': '-',
+      'Цаг': '-',
+      'Дүн': dir.amount,
+    });
+  }
+}
+
 // Өдрийн тайлан гаргах — тухайн өдрийн захиалгууд
 export async function getDailyReport(dateStr) {
   const d = await ensureLoaded();

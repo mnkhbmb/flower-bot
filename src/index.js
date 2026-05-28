@@ -3,7 +3,7 @@ import 'dotenv/config';
 import express from 'express';
 import cron from 'node-cron';
 import { handleMessage } from './handlers/orderFlow.js';
-import { startDiscord, sendDailyReport } from './services/discord.js';
+import { startDiscord, sendDailyReport, sendSalaryReminder } from './services/discord.js';
 
 const app = express();
 app.use(express.json());
@@ -52,12 +52,23 @@ app.listen(PORT, async () => {
 });
 
 // --- CRON: өдөр бүр 22:00-д Discord руу тайлан ---
-// Цагийн бүс: Render UTC ажилладаг тул UTC+8 → 14:00 UTC = 22:00 Улаанбаатар
+// UTC+8 → 14:00 UTC = 22:00 Улаанбаатар
 cron.schedule('0 14 * * *', async () => {
   console.log('📊 Өдрийн тайлан илгээж байна...');
   try {
     await sendDailyReport();
   } catch (err) {
     console.error('Тайлан алдаа:', err);
+  }
+});
+
+// --- CRON: сарын 10, 25-нд 12:00-д цалингийн сануулга ---
+// UTC+8 → 04:00 UTC = 12:00 Улаанбаатар
+cron.schedule('0 4 10,25 * *', async () => {
+  console.log('💵 Цалингийн сануулга илгээж байна...');
+  try {
+    await sendSalaryReminder();
+  } catch (err) {
+    console.error('Цалин сануулга алдаа:', err);
   }
 });

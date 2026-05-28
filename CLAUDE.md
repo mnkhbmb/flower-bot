@@ -17,9 +17,9 @@ No test runner or linter is configured. The project uses ES modules (`"type": "m
 Single Node.js server combining three integrations:
 
 - **Express webhook** (`src/index.js`) — receives Facebook Messenger events at `POST /webhook`, verifies the FB webhook at `GET /webhook`, and serves a health-check at `GET /`.
-- **Order flow state machine** (`src/handlers/orderFlow.js`) — manages per-user conversation state in an in-memory `Map<psid, session>`. Steps are defined in `src/config/catalog.js` as `STEPS`. Each incoming message advances the session through: `PICK_FLOWER → PICK_QTY → PICK_DELIVERY → ASK_NAME → ASK_PHONE → (ASK_ADDRESS) → CONFIRM → DONE`.
+- **Order flow state machine** (`src/handlers/orderFlow.js`) — manages per-user conversation state in an in-memory `Map<psid, session>`. Steps are defined in `src/config/catalog.js` as `STEPS`. Each incoming message advances the session through: `PICK_FLOWER → PICK_QTY → PICK_DELIVERY → ASK_NAME → ASK_PHONE → (ASK_ADDRESS) → CONFIRM → (session deleted)`. `STEPS.DONE` is defined but never set; the session is removed via `sessions.delete(psid)` after `finishOrder`.
 - **Google Sheets** (`src/services/sheets.js`) — writes completed orders to a sheet named `"Захиалга"` and reads it back for daily reports. Uses lazy-loaded `GoogleSpreadsheet` with JWT auth; the `loaded` flag prevents redundant `loadInfo()` calls.
-- **Discord bot** (`src/services/discord.js`) — registers a `/report` slash command on startup, sends a new-order embed to `DISCORD_ORDER_CHANNEL_ID` on each completed order, and sends a daily summary embed to `DISCORD_REPORT_CHANNEL_ID` via cron.
+- **Discord bot** (`src/services/discord.js`) — registers a `/report` slash command **globally** (not guild-scoped) on every startup; first-deploy propagation can take up to an hour. Sends a new-order embed to `DISCORD_ORDER_CHANNEL_ID` on each completed order, and sends a daily summary embed to `DISCORD_REPORT_CHANNEL_ID` via cron.
 - **Cron** (`src/index.js`) — `node-cron` fires daily at `0 14 * * *` UTC (= 22:00 Ulaanbaatar time) to push the daily report to Discord.
 
 ## Configuration
@@ -52,5 +52,6 @@ All runtime config lives in `.env`. See `.env.example` for the full list. Key va
 
 - Session state is in-memory only. Server restarts lose all active conversations. For production scale, migrate `sessions` Map in `orderFlow.js` to Redis or a database.
 - The Google Sheets client (`doc`) is a module-level singleton with a `loaded` boolean guard — do not instantiate multiple `GoogleSpreadsheet` instances.
+- The `"Захиалга"` sheet tab must be **pre-created** in the spreadsheet with exactly these column headers (order matters for display, but matching is by name): `Захиалгын #`, `Огноо`, `Харилцагч`, `Утас`, `Цэцэг / Баглаа`, `Тоо`, `Нэгж үнэ`, `Хүргэлт эсэх`, `Хаяг`, `Хүргэх огноо`, `Статус`, `Төлбөр`, `Эх сурвалж`, `Тэмдэглэл`.
 - `GOOGLE_PRIVATE_KEY` in `.env` stores newlines as literal `\n`; `sheets.js` replaces them with real newlines via `.replace(/\\n/g, '\n')`.
 - Deploy target is Render.com (free tier); the health-check route at `GET /` is required for Render's uptime check.
