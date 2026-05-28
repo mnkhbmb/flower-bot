@@ -130,6 +130,25 @@ export async function getSalaryReport(from, to) {
   return { from, to, workers: result };
 }
 
+// Бараа таталт хадгалах
+export async function saveBaraa(invoice) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Бараа таталт'];
+  if (!sheet) return;
+
+  for (const item of invoice.baraa) {
+    await sheet.addRow({
+      'Огноо':        invoice.ogno || new Date().toISOString().slice(0, 10),
+      'Баримт №':     invoice.barimtNo || '',
+      'Нийлүүлэгч':  invoice.nilluulegch || '',
+      'Бараа нэр':    item.ner || '',
+      'Тоо':          item.too || '',
+      'Нэгж үнэ':    item.negj || '',
+      'Нийт дүн':    item.niit || '',
+    });
+  }
+}
+
 // Өдрийн хаалт хадгалах
 export async function saveHaalt(data) {
   const d = await ensureLoaded();

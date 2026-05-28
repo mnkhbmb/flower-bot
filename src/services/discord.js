@@ -1,8 +1,9 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa } from './sheets.js';
+import { readInvoice } from './vision.js';
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
 // Ажилтан: өдрөөр тооцох
 const WORKERS = ['Туяа', 'Амина'];
@@ -194,6 +195,49 @@ export async function startDiscord() {
           await interaction.reply({ content: '⚠️ Ирц бүртгэхэд алдаа гарлаа.', ephemeral: true }).catch(() => {});
         }
       }
+    }
+  });
+
+  // #бараа-таталт channel-д зураг/PDF хавсаргахад автоматаар уншина
+  client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (message.channelId !== process.env.DISCORD_BARAA_CHANNEL_ID) return;
+    if (message.attachments.size === 0) return;
+
+    const attachment = message.attachments.first();
+    const isImage = attachment.contentType?.startsWith('image/');
+    const isPdf   = attachment.contentType?.includes('pdf');
+    if (!isImage && !isPdf) return;
+
+    const processing = await message.reply('⏳ Баримт уншиж байна...');
+
+    try {
+      const invoice = await readInvoice(attachment);
+      await saveBaraa(invoice);
+
+      const itemList = invoice.baraa.slice(0, 10)
+        .map((b, i) => `${i + 1}. ${b.ner} — ${b.too}ш × ${Number(b.negj).toLocaleString()}₮`)
+        .join('\n');
+      const more = invoice.baraa.length > 10 ? `\n... нийт ${invoice.baraa.length} төрөл` : '';
+
+      await processing.edit({
+        content: '',
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0x34A853)
+            .setTitle(`📦 Бараа таталт — Баримт №${invoice.barimtNo}`)
+            .addFields(
+              { name: '📅 Огноо', value: invoice.ogno || '—', inline: true },
+              { name: '🏭 Нийлүүлэгч', value: invoice.nilluulegch || '—', inline: true },
+              { name: '💰 Нийт дүн', value: `${Number(invoice.niitDun).toLocaleString()}₮`, inline: true },
+              { name: `📋 Бараа (${invoice.baraa.length} төрөл)`, value: itemList + more, inline: false },
+            )
+            .setTimestamp()
+        ]
+      });
+    } catch (err) {
+      console.error('Vision error:', err);
+      await processing.edit('⚠️ Баримт уншихад алдаа гарлаа. Зургийг тодорхой авч дахин оролдоно уу.');
     }
   });
 
