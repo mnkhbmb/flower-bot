@@ -202,6 +202,82 @@ export async function saveSalaryToSheet(from, to, workers, directors) {
   }
 }
 
+// Баглаа текстээс товчлол + тоог задлах
+// Жишээ: "1. Са-3 Ро-2 /Б/\n2. Уг-5 /П/" → [{tovch:'Са',too:3}, ...]
+function parseBaglaa(text) {
+  const result = [];
+  const pattern = /([А-ЯӨҮа-яөүA-Za-z\/]+)-(\d+)/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    result.push({ tovch: match[1], too: Number(match[2]) });
+  }
+  return result;
+}
+
+// Агуулахаас хасах (/haalt-аас дуудна)
+export async function decreaseAguurlah(baglaaText) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Агуулах'];
+  if (!sheet) return [];
+
+  const rows = await sheet.getRows();
+  const items = parseBaglaa(baglaaText);
+  const warnings = [];
+
+  for (const { tovch, too } of items) {
+    const row = rows.find(r => r.get('Товчлол') === tovch);
+    if (!row) continue;
+
+    const current = Number(row.get('Тоо')) || 0;
+    const newToo = Math.max(0, current - too);
+    row.set('Тоо', newToo);
+    await row.save();
+
+    const threshold = Number(row.get('Анхааруулгын хэмжээ')) || 0;
+    if (newToo <= threshold) {
+      warnings.push({ ner: row.get('Бараа нэр'), tovch, too: newToo, threshold });
+    }
+  }
+  return warnings;
+}
+
+// Агуулахад нэмэх (бараа таталтаас дуудна)
+export async function increaseAguurlah(invoiceItems) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Агуулах'];
+  if (!sheet) return;
+
+  const rows = await sheet.getRows();
+
+  for (const item of invoiceItems) {
+    // Бараа нэрийг агуулахын нэртэй тааруулах (агуулахын нэр invoice нэрд байгаа эсэх)
+    const row = rows.find(r => {
+      const ner = r.get('Бараа нэр')?.toLowerCase() || '';
+      const invoiceNer = item.ner?.toLowerCase() || '';
+      return invoiceNer.includes(ner) || ner.includes(invoiceNer.split(' ')[0]);
+    });
+    if (!row) continue;
+
+    const current = Number(row.get('Тоо')) || 0;
+    row.set('Тоо', current + Number(item.too));
+    await row.save();
+  }
+}
+
+// Агуулахын одоогийн байдал
+export async function getAguurlah() {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Агуулах'];
+  if (!sheet) return [];
+  const rows = await sheet.getRows();
+  return rows.map(r => ({
+    ner: r.get('Бараа нэр'),
+    tovch: r.get('Товчлол'),
+    too: Number(r.get('Тоо')) || 0,
+    threshold: Number(r.get('Анхааруулгын хэмжээ')) || 0,
+  }));
+}
+
 // Өдрийн тайлан гаргах — тухайн өдрийн захиалгууд
 export async function getDailyReport(dateStr) {
   const d = await ensureLoaded();

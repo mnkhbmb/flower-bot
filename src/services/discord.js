@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah } from './sheets.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -73,6 +73,26 @@ export async function startDiscord() {
 
         // Sheets-д хадгалах
         await saveHaalt({ name, baglaa, niit, belen, dans, pos, zarlaga, zarlTotal, tsever });
+
+        // Агуулахаас хасах + анхааруулга шалгах
+        if (baglaa) {
+          const warnings = await decreaseAguurlah(baglaa);
+          if (warnings.length > 0) {
+            const warnChannel = await client.channels.fetch(process.env.DISCORD_WARNING_CHANNEL_ID);
+            const warnList = warnings.map(w =>
+              `⚠️ **${w.ner}** (${w.tovch}) — үлдэгдэл: **${w.too}ш** (доод хэмжээ: ${w.threshold}ш)`
+            ).join('\n');
+            await warnChannel.send({
+              embeds: [
+                new EmbedBuilder()
+                  .setColor(0xFF0000)
+                  .setTitle('🚨 Агуулах анхааруулга!')
+                  .setDescription(warnList)
+                  .setTimestamp()
+              ]
+            });
+          }
+        }
 
         // #өдрийн-хаалт руу илгээх
         const channel = await client.channels.fetch(process.env.DISCORD_HAALT_CHANNEL_ID);
@@ -214,6 +234,7 @@ export async function startDiscord() {
     try {
       const invoice = await readInvoice(attachment);
       await saveBaraa(invoice);
+      await increaseAguurlah(invoice.baraa);
 
       const itemList = invoice.baraa.slice(0, 10)
         .map((b, i) => `${i + 1}. ${b.ner} — ${b.too}ш × ${Number(b.negj).toLocaleString()}₮`)
