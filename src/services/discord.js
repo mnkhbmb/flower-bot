@@ -35,23 +35,24 @@ const commands = [
 ];
 
 export async function startDiscord() {
-  try {
-    console.log('🔄 Discord bot эхлүүлж байна...');
-    console.log('TOKEN байгаа эсэх:', !!process.env.DISCORD_BOT_TOKEN);
-    console.log('CLIENT_ID байгаа эсэх:', !!process.env.DISCORD_CLIENT_ID);
+  console.log('🔄 Discord bot эхлүүлж байна...');
 
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
-    await rest.put(
-      Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
-      { body: commands }
-    );
-    console.log('✅ Командууд бүртгэгдлээ');
-  } catch (err) {
-    console.error('❌ Discord команд бүртгэх алдаа:', err.message, err.status, err.code);
-  }
+  // Bot ready болсны дараа командуудыг бүртгэнэ
+  client.once('clientReady', async (c) => {
+    console.log(`✅ Discord bot: ${c.user.tag}`);
+    try {
+      const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
+      await rest.put(
+        Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
+        { body: commands }
+      );
+      console.log('✅ Командууд бүртгэгдлээ');
+    } catch (err) {
+      console.error('❌ Команд бүртгэх алдаа:', err.message);
+    }
+  });
 
-  client.once('ready', () => console.log(`✅ Discord bot: ${client.user.tag}`));
-  client.on('error', (err) => console.error('❌ Discord client error:', err.message));
+  client.on('error', (err) => console.error('❌ Discord error:', err.message));
 
   // Командууд болон modal submit хариулах
   client.on('interactionCreate', async (interaction) => {
