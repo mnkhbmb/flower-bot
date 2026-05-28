@@ -193,13 +193,25 @@ export async function startDiscord() {
 
     // /irts
     if (interaction.commandName === 'irts') {
+      const name = interaction.user.displayName || interaction.user.username;
+      const type = interaction.options.getString('torol');
+      const emoji = type === 'in' ? '🟢' : '🔴';
+      const label = type === 'in' ? 'ирлээ' : 'гарлаа';
+
+      // Шууд хариу өгнө (3 секундын дотор)
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(type === 'in' ? 0x34A853 : 0xC9445A)
+            .setTitle(`${emoji} Ирц бүртгэгдлээ`)
+            .setDescription(`**${name}** ${label}`)
+            .setTimestamp()
+        ]
+      });
+
+      // Sheets-д бичих (дараа нь)
       try {
-        await interaction.deferReply();
-        const name = interaction.user.displayName || interaction.user.username;
-        const type = interaction.options.getString('torol');
         const result = await logAttendance(name, type);
-        const emoji = type === 'in' ? '🟢' : '🔴';
-        const label = type === 'in' ? 'ирлээ' : 'гарлаа';
         await interaction.editReply({
           embeds: [
             new EmbedBuilder()
@@ -210,10 +222,7 @@ export async function startDiscord() {
           ]
         });
       } catch (err) {
-        console.error('Irts command error:', err);
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({ content: '⚠️ Ирц бүртгэхэд алдаа гарлаа.', ephemeral: true }).catch(() => {});
-        }
+        console.error('Irts sheets error:', err);
       }
     }
   });
