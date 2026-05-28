@@ -1,6 +1,5 @@
 // Claude Vision — зураг/PDF-ээс бараа таталтын мэдээлэл унших
 import Anthropic from '@anthropic-ai/sdk';
-import fetch from 'node-fetch';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
