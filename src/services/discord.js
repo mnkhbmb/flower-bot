@@ -277,8 +277,8 @@ export async function startDiscord() {
         ]
       });
     } catch (err) {
-      console.error('Vision error:', err);
-      await processing.edit('⚠️ Баримт уншихад алдаа гарлаа. Зургийг тодорхой авч дахин оролдоно уу.');
+      console.error('Vision error:', err.message, err.status, err.code, err.stack?.slice(0, 300));
+      await processing.edit(`⚠️ Алдаа: ${err.message || 'Тодорхойгүй алдаа'}`);
     }
   });
 
