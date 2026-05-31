@@ -149,11 +149,23 @@ export async function saveBaraa(invoice) {
   }
 }
 
+// Tab-ыг нэрээр нь (том/жижиг үсэг үл хамааран) олох
+function findSheet(d, title) {
+  const want = title.trim().toLowerCase();
+  for (const key of Object.keys(d.sheetsByTitle)) {
+    if (key.trim().toLowerCase() === want) return d.sheetsByTitle[key];
+  }
+  return null;
+}
+
 // Өдрийн хаалт хадгалах
 export async function saveHaalt(data) {
   const d = await ensureLoaded();
-  const sheet = d.sheetsByTitle['Өдрийн хаалт'];
-  if (!sheet) return;
+  const sheet = findSheet(d, 'Өдрийн хаалт');
+  if (!sheet) {
+    console.error('❌ "Өдрийн хаалт" tab олдсонгүй. Tab-ууд:', Object.keys(d.sheetsByTitle));
+    throw new Error('Өдрийн хаалт tab олдсонгүй');
+  }
   const today = new Date().toISOString().slice(0, 10);
   await sheet.addRow({
     'Огноо':        today,
@@ -250,17 +262,34 @@ export async function increaseAguurlah(invoiceItems) {
   const rows = await sheet.getRows();
 
   for (const item of invoiceItems) {
-    // Бараа нэрийг агуулахын нэртэй тааруулах (агуулахын нэр invoice нэрд байгаа эсэх)
-    const row = rows.find(r => {
-      const ner = r.get('Бараа нэр')?.toLowerCase() || '';
-      const invoiceNer = item.ner?.toLowerCase() || '';
-      return invoiceNer.includes(ner) || ner.includes(invoiceNer.split(' ')[0]);
-    });
-    if (!row) continue;
+    const invoiceNer = item.ner?.toLowerCase() || '';
 
-    const current = Number(row.get('Тоо')) || 0;
-    row.set('Тоо', current + Number(item.too));
-    await row.save();
+    // Түлхүүр үг байвал тэрийг ашиглана, үгүй бол Товчлолоор тааруулна
+    const row = rows.find(r => {
+      const keywords = r.get('Түлхүүр үг')?.toLowerCase() || '';
+      if (keywords) {
+        return keywords.split(',').some(kw => kw.trim() && invoiceNer.includes(kw.trim()));
+      }
+      const tovch = r.get('Товчлол')?.toLowerCase() || '';
+      return tovch && invoiceNer.includes(tovch);
+    });
+
+    if (row) {
+      const current = Number(row.get('Тоо')) || 0;
+      row.set('Тоо', current + Number(item.too));
+      await row.save();
+    } else {
+      // Олдоогүй бол шинэ мөр нэмнэ
+      await sheet.addRow({
+        '№': rows.length + 1,
+        'Бараа нэр': item.ner,
+        'Товчлол': '',
+        'Төрөл': 'Цэцэг',
+        'Анхны тоо': item.too,
+        'Тоо': item.too,
+        'Анхааруулгын хэмжээ': 5,
+      });
+    }
   }
 }
 
