@@ -316,6 +316,21 @@ export async function increaseAguurlah(invoiceItems) {
   }
 }
 
+// Агуулахд гараар нэмэх (товчлолоор)
+export async function manualAddAguurlah(tovch, too) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Агуулах'];
+  if (!sheet) return null;
+  const rows = await sheet.getRows();
+  const row = rows.find(r => r.get('Товчлол') === tovch);
+  if (!row) return null;
+  const current = Number(row.get('Тоо')) || 0;
+  const newToo = current + too;
+  row.set('Тоо', newToo);
+  await row.save();
+  return { ner: row.get('Бараа нэр'), tovch, oldToo: current, newToo };
+}
+
 // Агуулахын одоогийн байдал
 export async function getAguurlah() {
   const d = await ensureLoaded();
