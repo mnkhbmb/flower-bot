@@ -179,6 +179,29 @@ export async function saveHaalt(data) {
     'Зарлага нийт': data.zarlTotal,
     'Цэвэр орлого': data.tsever,
   });
+
+  // Баглаа бүрийг "Хаалт задаргаа" tab-д тусдаа мөр болгох
+  if (data.baglaa) {
+    const detail = findSheet(d, 'Хаалт задаргаа');
+    if (detail) {
+      let isHorogdol = false;
+      const lines = data.baglaa.split('\n');
+      for (const line of lines) {
+        // "Хорогдол" гэсэн үгнээс хойшхи мөрүүдийг хорогдол гэж тэмдэглэнэ
+        if (/хорогдол/i.test(line)) isHorogdol = true;
+        const matches = [...line.matchAll(/([А-ЯӨҮа-яөүA-Za-z\/]+)-(\d+)/g)];
+        for (const m of matches) {
+          await detail.addRow({
+            'Огноо':   today,
+            'Ажилтан': data.name,
+            'Товчлол': m[1],
+            'Тоо':     Number(m[2]),
+            'Төрөл':   isHorogdol ? 'Хорогдол' : 'Зарсан',
+          });
+        }
+      }
+    }
+  }
 }
 
 // Цалин Sheets-д хадгалах
@@ -307,22 +330,25 @@ export async function getAguurlah() {
   }));
 }
 
-// Өдрийн тайлан гаргах — тухайн өдрийн захиалгууд
+// Өдрийн тайлан гаргах — "Өдрийн хаалт" tab-аас тооцоолно
 export async function getDailyReport(dateStr) {
   const d = await ensureLoaded();
-  const sheet = d.sheetsByTitle['Захиалга'];
-  const rows = await sheet.getRows();
+  const sheet = findSheet(d, 'Өдрийн хаалт');
   const target = dateStr || new Date().toISOString().slice(0, 10);
+  if (!sheet) return { date: target, count: 0, niit: 0, belen: 0, dans: 0, pos: 0, zarlaga: 0, tsever: 0 };
 
+  const rows = await sheet.getRows();
   const todays = rows.filter(r => r.get('Огноо') === target);
-  let revenue = 0, deliveries = 0;
 
+  let niit = 0, belen = 0, dans = 0, pos = 0, zarlaga = 0, tsever = 0;
   for (const r of todays) {
-    const qty = Number(r.get('Тоо')) || 0;
-    const price = Number(r.get('Нэгж үнэ')) || 0;
-    revenue += qty * price;
-    if (r.get('Хүргэлт эсэх') === 'Тийм') deliveries++;
+    niit    += Number(r.get('Нийт орлого')) || 0;
+    belen   += Number(r.get('Бэлэн')) || 0;
+    dans    += Number(r.get('Данс')) || 0;
+    pos     += Number(r.get('Пос')) || 0;
+    zarlaga += Number(r.get('Зарлага нийт')) || 0;
+    tsever  += Number(r.get('Цэвэр орлого')) || 0;
   }
 
-  return { date: target, count: todays.length, revenue, deliveries };
+  return { date: target, count: todays.length, niit, belen, dans, pos, zarlaga, tsever };
 }

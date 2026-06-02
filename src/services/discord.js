@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah } from './sheets.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -31,6 +31,16 @@ const commands = [
   new SlashCommandBuilder()
     .setName('haalt')
     .setDescription('Өдрийн хаалт оруулах')
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('aguulah_nem')
+    .setDescription('Агуулахд бараа нэмэх')
+    .addStringOption(o => o.setName('tovch').setDescription('Товчлол (Са, Ро, Ба...)').setRequired(true))
+    .addIntegerOption(o => o.setName('too').setDescription('Нэмэх тоо').setRequired(true))
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('aguulah')
+    .setDescription('Агуулахын одоогийн байдал харах')
     .toJSON(),
 ];
 
@@ -202,6 +212,59 @@ export async function startDiscord() {
       return;
     }
 
+    // /aguulah_nem
+    if (interaction.commandName === 'aguulah_nem') {
+      const tovch = interaction.options.getString('tovch');
+      const too = interaction.options.getInteger('too');
+      await interaction.deferReply();
+      try {
+        const result = await manualAddAguurlah(tovch, too);
+        if (!result) {
+          await interaction.editReply(`⚠️ **${tovch}** товчлол агуулахд олдсонгүй.`);
+          return;
+        }
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor(0x34A853)
+            .setTitle('📦 Агуулах шинэчлэгдлээ')
+            .addFields(
+              { name: 'Бараа', value: `${result.ner} (${result.tovch})`, inline: true },
+              { name: 'Өмнө', value: `${result.oldToo}ш`, inline: true },
+              { name: 'Одоо', value: `**${result.newToo}ш**`, inline: true },
+            )
+            .setTimestamp()]
+        });
+      } catch (err) {
+        console.error('aguulah_nem error:', err.message);
+        await interaction.editReply('⚠️ Алдаа гарлаа.');
+      }
+      return;
+    }
+
+    // /aguulah
+    if (interaction.commandName === 'aguulah') {
+      await interaction.deferReply();
+      try {
+        const items = await getAguurlah();
+        const list = items.map(i => {
+          const warn = i.too <= i.threshold ? '🔴' : i.too <= i.threshold * 2 ? '🟡' : '🟢';
+          return `${warn} **${i.tovch}** ${i.ner} — ${i.too}ш`;
+        }).join('\n');
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('🏪 Агуулахын байдал')
+            .setDescription(list || 'Мэдээлэл байхгүй')
+            .setFooter({ text: '🔴 Дуусаж байна  🟡 Анхаар  🟢 Хангалттай' })
+            .setTimestamp()]
+        });
+      } catch (err) {
+        console.error('aguulah error:', err.message);
+        await interaction.editReply('⚠️ Алдаа гарлаа.');
+      }
+      return;
+    }
+
     // /irts
     if (interaction.commandName === 'irts') {
       const name = interaction.user.displayName || interaction.user.username;
@@ -316,10 +379,14 @@ function dailyEmbed(r) {
     .setColor(0x34A853)
     .setTitle(`📊 Өдрийн тайлан — ${r.date}`)
     .addFields(
-      { name: 'Нийт орлого', value: `${r.revenue.toLocaleString()}₮`, inline: true },
-      { name: 'Захиалга', value: `${r.count} ш`, inline: true },
-      { name: 'Хүргэлт', value: `${r.deliveries} / ${r.count}`, inline: true },
+      { name: '💰 Нийт орлого', value: `${r.niit.toLocaleString()}₮`, inline: true },
+      { name: '💵 Бэлэн', value: `${r.belen.toLocaleString()}₮`, inline: true },
+      { name: '🏦 Данс', value: `${r.dans.toLocaleString()}₮`, inline: true },
+      { name: '💳 Пос', value: `${r.pos.toLocaleString()}₮`, inline: true },
+      { name: '🧾 Зарлага', value: `${r.zarlaga.toLocaleString()}₮`, inline: true },
+      { name: '✅ Цэвэр орлого', value: `${r.tsever.toLocaleString()}₮`, inline: true },
     )
+    .setFooter({ text: `${r.count} удаагийн хаалт` })
     .setTimestamp();
 }
 
