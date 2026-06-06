@@ -31,6 +31,9 @@ export async function handleMessage(psid, message) {
   const text = message.text?.trim();
   const imageUrl = message.attachments?.find(a => a.type === 'image')?.payload?.url;
 
+  // DEBUG: ирж буй мессежийн бүтцийг бүтнээр харах
+  console.log('📩 INCOMING:', JSON.stringify(message), '| payload=', payload, '| step=', session.step);
+
   // Захиалга эхлүүлэх товч — хаанаас ч ажиллана (AI горимоос гарах ч мөн)
   if (payload === 'START_ORDER') {
     return askFlower(psid, session);
