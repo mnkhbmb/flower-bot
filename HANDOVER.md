@@ -13,6 +13,7 @@ Facebook Messenger + Discord + Google Sheets-тэй холбож автомат�
 | Discord bot | Ажилчдын командууд (ирц, хаалт, агуулах, тайлан) | `src/services/discord.js` |
 | Google Sheets | Бүх мэдээллийг хадгалдаг "өгөгдлийн сан" | `src/services/sheets.js` |
 | Claude Vision (AI) | Бараа таталтын зураг/PDF-ийг уншина | `src/services/vision.js` |
+| Claude чат (AI) | Үйлчлүүлэгчийн асуултад хариулах, зургаас барагцаа үнэ хэлэх | `src/services/aiChat.js` |
 | Cron (хуваарь) | Өдрийн тайлан, цалингийн сануулга автоматаар | `src/index.js` |
 
 ---
@@ -93,7 +94,8 @@ Facebook Messenger + Discord + Google Sheets-тэй холбож автомат�
 | `GOOGLE_SHEET_ID` | Spreadsheet-ийн ID (URL-ээс) |
 | `GOOGLE_SERVICE_EMAIL` | Service account email (Sheet-д Editor болгож share хийнэ) |
 | `GOOGLE_PRIVATE_KEY` | Service account-ийн private key |
-| `ANTHROPIC_API_KEY` | Claude Vision (бараа таталт зураг унших) |
+| `ANTHROPIC_API_KEY` | Claude Vision + AI чат |
+| `FB_ALBUM_URL` | Баглааны зургийн FB цомгийн линк (заавал биш) |
 
 > ⚠️ `GOOGLE_PRIVATE_KEY` нь `-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n`
 > хэлбэртэй, `\n` тэмдэгтүүд хэвээр байх ёстой. Энэ буруу бол `ERR_OSSL_UNSUPPORTED` алдаа гарна.
