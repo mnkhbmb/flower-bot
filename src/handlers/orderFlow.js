@@ -1,9 +1,9 @@
 // Захиалгын яриа удирдах — товч дарж сонгох flow
-import { sendText, sendButtons, sendTyping } from '../services/messenger.js';
+import { sendText, sendButtons, sendLinkButton, sendTyping } from '../services/messenger.js';
 import { addOrder } from '../services/sheets.js';
 import { notifyNewOrder } from '../services/discord.js';
 import { askAI, priceFromImage } from '../services/aiChat.js';
-import { CATALOG, STEPS, PAYMENT_INFO, BOUQUET_ALBUM_URL, SHOW_PRICES } from '../config/catalog.js';
+import { CATALOG, STEPS, PAYMENT_INFO, BOUQUET_ALBUM_URL, SHOW_PRICES, SHOP_INFO } from '../config/catalog.js';
 
 // Хэрэглэгч бүрийн ярианы төлөв (санах ой). Production-д Redis/DB зөвлөнө.
 const sessions = new Map();
@@ -43,7 +43,26 @@ export async function handleMessage(psid, message) {
 
   // Баглааны цомог үзэх товч
   if (payload === 'VIEW_ALBUM') {
-    await sendText(psid, `Манай баглааны загварууд энд байна 📸\n${BOUQUET_ALBUM_URL}`);
+    await sendLinkButton(psid, 'Манай баглааны загварууд энд байна 📸', [
+      { title: '📸 Баглаа үзэх', url: BOUQUET_ALBUM_URL },
+    ]);
+    return showMenu(psid, session);
+  }
+
+  // Цагийн хуваарь / хаяг товч
+  if (payload === 'SHOW_HOURS') {
+    await sendText(
+      psid,
+      `🕙 Цагийн хуваарь: ${SHOP_INFO.hours}\n📍 Хаяг: ${SHOP_INFO.address}\n🚚 ${SHOP_INFO.delivery}`
+    );
+    return showMenu(psid, session);
+  }
+
+  // Байршил / газрын зураг товч
+  if (payload === 'SHOW_MAP') {
+    await sendLinkButton(psid, `📍 ${SHOP_INFO.address}`, [
+      { title: '🗺️ Газрын зураг нээх', url: SHOP_INFO.maps },
+    ]);
     return showMenu(psid, session);
   }
 
@@ -155,6 +174,8 @@ async function showMenu(psid, session) {
       { title: '🌸 Захиалга өгөх', payload: 'START_ORDER' },
       { title: '💬 Асуулт асуух', payload: 'AI_CHAT' },
       { title: '📸 Баглаа үзэх', payload: 'VIEW_ALBUM' },
+      { title: '🕙 Цагийн хуваарь', payload: 'SHOW_HOURS' },
+      { title: '🗺️ Байршил', payload: 'SHOW_MAP' },
     ]
   );
 }

@@ -24,7 +24,7 @@ export const STEPS = {
 export const PAYMENT_INFO = 'Хаан банк: 5XXX XXXX · Хүлээн авагч: [нэр]';
 
 // Баглааны зургийн FB цомгийн линк — энд засна (эсвэл .env-д FB_ALBUM_URL)
-export const BOUQUET_ALBUM_URL = process.env.FB_ALBUM_URL || 'https://www.facebook.com/IkhNaydPlaza';
+export const BOUQUET_ALBUM_URL = process.env.FB_ALBUM_URL || 'https://www.facebook.com/LaParadisoMN/photos_by';
 
 // Үнэ харуулах эсэх — бодит үнэ бэлэн болоход true болгоно.
 // false үед бот үнэ хэлэхгүй, "ажилтан тань үнийг баталгаажуулна" гэж чиглүүлнэ.

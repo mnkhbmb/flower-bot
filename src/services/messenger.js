@@ -36,6 +36,27 @@ export async function sendButtons(psid, text, buttons) {
   });
 }
 
+// URL товчтой мессеж (web_url — даравал линк/газрын зураг нээнэ)
+export async function sendLinkButton(psid, text, links) {
+  await callSendAPI({
+    recipient: { id: psid },
+    message: {
+      attachment: {
+        type: 'template',
+        payload: {
+          template_type: 'button',
+          text,
+          buttons: links.slice(0, 3).map(l => ({
+            type: 'web_url',
+            url: l.url,
+            title: l.title,
+          })),
+        },
+      },
+    },
+  });
+}
+
 // Хэрэглэгч бичиж байгаа дохио
 export async function sendTyping(psid) {
   await callSendAPI({
