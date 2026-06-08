@@ -3,7 +3,7 @@ import { sendText, sendButtons, sendTyping } from '../services/messenger.js';
 import { addOrder } from '../services/sheets.js';
 import { notifyNewOrder } from '../services/discord.js';
 import { askAI, priceFromImage } from '../services/aiChat.js';
-import { CATALOG, STEPS, PAYMENT_INFO, BOUQUET_ALBUM_URL } from '../config/catalog.js';
+import { CATALOG, STEPS, PAYMENT_INFO, BOUQUET_ALBUM_URL, SHOW_PRICES } from '../config/catalog.js';
 
 // Хэрэглэгч бүрийн ярианы төлөв (санах ой). Production-д Redis/DB зөвлөнө.
 const sessions = new Map();
@@ -253,8 +253,13 @@ async function askAddress(psid, session) {
 async function showConfirm(psid, session) {
   session.step = STEPS.CONFIRM;
   const o = session.order;
-  const total = (o.qty * o.unitPrice).toLocaleString();
-  let summary = `Танай захиалга:\n🌸 ${o.flower} x ${o.qty}\n💰 Нийт: ${total}₮\n`;
+  let summary = `Танай захиалга:\n🌸 ${o.flower} x ${o.qty}\n`;
+  // Үнэ харуулах горимд л нийт дүнг харуулна
+  if (SHOW_PRICES) {
+    summary += `💰 Нийт: ${(o.qty * o.unitPrice).toLocaleString()}₮\n`;
+  } else {
+    summary += `💰 Үнийг ажилтан баталгаажуулна\n`;
+  }
   summary += o.delivery ? `🚚 Хүргэлт: ${o.address}\n` : '🏬 Дэлгүүрээс авна\n';
   summary += `📞 ${o.phone}\n\nЗөв үү?`;
   await sendButtons(psid, summary, [
@@ -267,11 +272,12 @@ async function finishOrder(psid, session) {
   try {
     const saved = await addOrder(session.order);   // Sheets руу бичих
     await notifyNewOrder(saved);                    // Discord руу мэдэгдэх
-    await sendText(
-      psid,
-      `Баярлалаа! Захиалга ${saved.orderId} хүлээн авлаа 🌸\n` +
-      `Төлбөрийн мэдээлэл:\n${PAYMENT_INFO}\n\nБид удахгүй холбогдоно.`
-    );
+    const closing = SHOW_PRICES
+      ? `Баярлалаа! Захиалга ${saved.orderId} хүлээн авлаа 🌸\n` +
+        `Төлбөрийн мэдээлэл:\n${PAYMENT_INFO}\n\nБид удахгүй холбогдоно.`
+      : `Баярлалаа! Захиалга ${saved.orderId} хүлээн авлаа 🌸\n` +
+        `Ажилтан тань үнэ болон төлбөрийн мэдээллийг хэлэхээр удахгүй холбогдоно.`;
+    await sendText(psid, closing);
   } catch (err) {
     console.error('Order save error:', err);
     await sendText(psid, 'Захиалга хадгалахад алдаа гарлаа. Дахин оролдоно уу 🙏');

@@ -24,4 +24,16 @@ export const STEPS = {
 export const PAYMENT_INFO = 'Хаан банк: 5XXX XXXX · Хүлээн авагч: [нэр]';
 
 // Баглааны зургийн FB цомгийн линк — энд засна (эсвэл .env-д FB_ALBUM_URL)
-export const BOUQUET_ALBUM_URL = process.env.FB_ALBUM_URL || 'https://www.facebook.com/';
+export const BOUQUET_ALBUM_URL = process.env.FB_ALBUM_URL || 'https://www.facebook.com/IkhNaydPlaza';
+
+// Үнэ харуулах эсэх — бодит үнэ бэлэн болоход true болгоно.
+// false үед бот үнэ хэлэхгүй, "ажилтан тань үнийг баталгаажуулна" гэж чиглүүлнэ.
+export const SHOW_PRICES = false;
+
+// Дэлгүүрийн мэдээлэл — энд засна
+export const SHOP_INFO = {
+  address: 'Их Найд Plaza, 1 давхарт',
+  hours: 'Өдөр бүр 10:00 – 20:00',
+  maps: 'https://maps.app.goo.gl/a1hFqxr6im7mn6q17',
+  delivery: '50,000₮-аас дээш захиалгад хотын А бүсэд хүргэлт хийнэ',
+};
