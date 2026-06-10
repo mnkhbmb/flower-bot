@@ -91,25 +91,33 @@ export async function logAttendance(name, type) {
 }
 
 // Цалингийн тооцоо
-export async function getSalaryReport(from, to) {
+export async function getSalaryReport(from, to, exclude = []) {
   const d = await ensureLoaded();
   const sheet = d.sheetsByTitle['Ирц'];
   const rows = await sheet.getRows();
 
   const DAILY_RATE = 71500;
-  const WORKERS = ['Туяа', 'Амина'];
+
+  // Хугацааны мужид багтах, ажилтны нэртэй мөрүүд
+  const inRange = rows.filter(r => {
+    const date = r.get('Огноо');
+    const name = (r.get('Ажилтан') || '').trim();
+    return name && date >= from && date <= to;
+  });
+
+  // Sheet дээрх бүх ажилтны нэрсийг динамикаар цуглуулна (hardcode хийхгүй).
+  // Ингэснээр Discord username эсвэл бодит нэр ямар ч байсан таарна.
+  const names = [...new Set(inRange.map(r => (r.get('Ажилтан') || '').trim()))]
+    .filter(n => n && !exclude.includes(n));
 
   const result = {};
-  for (const name of WORKERS) {
-    // Тухайн хугацааны ирсэн + гарсан бүртгэлтэй өдрүүдийг тоолно
-    const days = rows.filter(r => {
-      const date = r.get('Огноо');
-      return r.get('Ажилтан') === name &&
-        r.get('Ирсэн цаг') &&
-        r.get('Гарсан цаг') &&
-        date >= from &&
-        date <= to;
-    });
+  for (const name of names) {
+    // Ирсэн + гарсан цаг хоёулаа бүртгэлтэй өдрүүдийг тоолно
+    const days = inRange.filter(r =>
+      (r.get('Ажилтан') || '').trim() === name &&
+      r.get('Ирсэн цаг') &&
+      r.get('Гарсан цаг')
+    );
 
     // Нийт цаг тооцох
     let totalMinutes = 0;

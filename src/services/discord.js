@@ -42,6 +42,10 @@ const commands = [
     .setName('aguulah')
     .setDescription('Агуулахын одоогийн байдал харах')
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('tsalin')
+    .setDescription('Энэ хугацааны цалингийн тооцоо харах')
+    .toJSON(),
 ];
 
 export async function startDiscord() {
@@ -265,6 +269,20 @@ export async function startDiscord() {
       return;
     }
 
+    // /tsalin — энэ хугацааны цалин харах (sheet-д хадгалахгүй, зөвхөн харна)
+    if (interaction.commandName === 'tsalin') {
+      await interaction.deferReply();
+      try {
+        const { from, to } = getSalaryPeriod();
+        const embed = await buildSalaryEmbed(from, to, { save: false });
+        await interaction.editReply({ embeds: [embed] });
+      } catch (err) {
+        console.error('tsalin error:', err.message);
+        await interaction.editReply('⚠️ Цалин тооцоход алдаа гарлаа.');
+      }
+      return;
+    }
+
     // /irts
     if (interaction.commandName === 'irts') {
       const name = interaction.user.displayName || interaction.user.username;
@@ -415,11 +433,11 @@ function getSalaryPeriod() {
   }
 }
 
-// Цалингийн сануулга — сарын 10, 25-нд 12:00-д
-export async function sendSalaryReminder() {
-  const channel = await client.channels.fetch(process.env.DISCORD_SALARY_CHANNEL_ID);
-  const { from, to } = getSalaryPeriod();
-  const report = await getSalaryReport(from, to);
+// Цалингийн тооцоог уншаад embed бэлдэх (sheet-с динамикаар).
+// save=true үед Цалин sheet-д хадгална (cron-д).
+async function buildSalaryEmbed(from, to, { save = false } = {}) {
+  // Захирлуудын нэрийг хасаж, бусад бүх ажилтныг динамикаар тоолно
+  const report = await getSalaryReport(from, to, DIRECTORS.map(d => d.name));
 
   // Ажилтны цалин (өдрөөр)
   const workerFields = Object.entries(report.workers).map(([name, data]) => ({
@@ -439,17 +457,30 @@ export async function sendSalaryReminder() {
   const directorTotal = DIRECTORS.reduce((s, d) => s + d.amount, 0);
   const grandTotal = workerTotal + directorTotal;
 
-  // Sheets-д хадгалах
-  await saveSalaryToSheet(from, to, report.workers, DIRECTORS);
+  if (save) {
+    await saveSalaryToSheet(from, to, report.workers, DIRECTORS);
+  }
 
   const embed = new EmbedBuilder()
     .setColor(0xF4B400)
     .setTitle(`💵 Цалингийн тооцоо — ${from} ~ ${to}`)
-    .addFields(...workerFields)
+    .addFields(
+      workerFields.length
+        ? workerFields
+        : [{ name: '👩 Ажилтан', value: 'Энэ хугацаанд ирцийн бүртгэл алга', inline: false }]
+    )
     .addFields({ name: '─────────────', value: '👑 **Захирлууд**', inline: false })
     .addFields(...directorFields)
     .addFields({ name: '─────────────', value: `**Нийт: ${grandTotal.toLocaleString()}₮**`, inline: false })
     .setTimestamp();
 
+  return embed;
+}
+
+// Цалингийн сануулга — сарын 10, 25-нд 12:00-д (cron). Sheet-д хадгална.
+export async function sendSalaryReminder() {
+  const channel = await client.channels.fetch(process.env.DISCORD_SALARY_CHANNEL_ID);
+  const { from, to } = getSalaryPeriod();
+  const embed = await buildSalaryEmbed(from, to, { save: true });
   await channel.send({ embeds: [embed] });
 }
