@@ -245,6 +245,44 @@ export async function saveSalaryToSheet(from, to, workers, directors) {
   }
 }
 
+// Зээл / урьдчилгаа хадгалах — "Зээл" tab (байхгүй бол үүсгэнэ)
+export async function saveZeel({ name, amount, note }) {
+  const d = await ensureLoaded();
+  let sheet = findSheet(d, 'Зээл');
+  if (!sheet) {
+    sheet = await d.addSheet({
+      title: 'Зээл',
+      headerValues: ['Огноо', 'Ажилтан', 'Дүн', 'Тэмдэглэл'],
+    });
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  await sheet.addRow({
+    'Огноо': today,
+    'Ажилтан': name,
+    'Дүн': amount,
+    'Тэмдэглэл': note || '',
+  });
+  return { date: today, name, amount };
+}
+
+// Хугацааны мужид авсан зээлийг ажилтнаар нэгтгэх → { нэр: нийт дүн }
+export async function getAdvances(from, to) {
+  const d = await ensureLoaded();
+  const sheet = findSheet(d, 'Зээл');
+  if (!sheet) return {};
+  const rows = await sheet.getRows();
+
+  const result = {};
+  for (const r of rows) {
+    const date = r.get('Огноо');
+    const name = (r.get('Ажилтан') || '').trim();
+    if (!name || date < from || date > to) continue;
+    const amount = Number(String(r.get('Дүн') || '').replace(/[^\d]/g, '')) || 0;
+    result[name] = (result[name] || 0) + amount;
+  }
+  return result;
+}
+
 // Баглаа текстээс товчлол + тоог задлах
 // Жишээ: "1. Са-3 Ро-2 /Б/\n2. Уг-5 /П/" → [{tovch:'Са',too:3}, ...]
 function parseBaglaa(text) {

@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances } from './sheets.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -45,6 +45,13 @@ const commands = [
   new SlashCommandBuilder()
     .setName('tsalin')
     .setDescription('Энэ хугацааны цалингийн тооцоо харах')
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('zeel')
+    .setDescription('Цалингаас өмнө авсан зээл/урьдчилгаа бүртгэх (цалингаас хасагдана)')
+    .addIntegerOption(o => o.setName('dun').setDescription('Авсан дүн (₮)').setRequired(true))
+    .addStringOption(o => o.setName('ner').setDescription('Хэн авсан бэ? (хоосон бол өөрийн нэр)').setRequired(false))
+    .addStringOption(o => o.setName('temdeglel').setDescription('Тэмдэглэл').setRequired(false))
     .toJSON(),
 ];
 
@@ -283,6 +290,35 @@ export async function startDiscord() {
       return;
     }
 
+    // /zeel — цалингаас өмнө авсан зээл/урьдчилгаа бүртгэх
+    if (interaction.commandName === 'zeel') {
+      await interaction.deferReply();
+      try {
+        const amount = interaction.options.getInteger('dun');
+        const name = interaction.options.getString('ner')
+          || interaction.user.displayName || interaction.user.username;
+        const note = interaction.options.getString('temdeglel') || '';
+
+        if (!amount || amount <= 0) {
+          await interaction.editReply('⚠️ Дүн 0-ээс их байх ёстой.');
+          return;
+        }
+
+        await saveZeel({ name, amount, note });
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor(0xE67E22)
+            .setTitle('💸 Зээл бүртгэгдлээ')
+            .setDescription(`**${name}** — ${amount.toLocaleString()}₮${note ? `\n📝 ${note}` : ''}\n\nЭнэ хугацааны цалингаас хасагдана.`)
+            .setTimestamp()]
+        });
+      } catch (err) {
+        console.error('zeel error:', err.message);
+        await interaction.editReply('⚠️ Зээл бүртгэхэд алдаа гарлаа.');
+      }
+      return;
+    }
+
     // /irts
     if (interaction.commandName === 'irts') {
       const name = interaction.user.displayName || interaction.user.username;
@@ -438,27 +474,46 @@ function getSalaryPeriod() {
 async function buildSalaryEmbed(from, to, { save = false } = {}) {
   // Захирлуудын нэрийг хасаж, бусад бүх ажилтныг динамикаар тоолно
   const report = await getSalaryReport(from, to, DIRECTORS.map(d => d.name));
+  // Тухайн хугацаанд авсан зээл/урьдчилгаа (нэрээр)
+  const advances = await getAdvances(from, to);
 
-  // Ажилтны цалин (өдрөөр)
-  const workerFields = Object.entries(report.workers).map(([name, data]) => ({
-    name: `👩 ${name}`,
-    value: `📅 ${data.days} өдөр · ⏱ ${data.hours} цаг · 💰 **${data.salary.toLocaleString()}₮**`,
-    inline: false,
-  }));
+  // Дүнг зээлээр хасаж мөрийн текст бэлдэх туслах
+  const line = (gross, adv) => {
+    const net = gross - adv;
+    return adv > 0
+      ? `💰 ${gross.toLocaleString()}₮ · 💸 Зээл: -${adv.toLocaleString()}₮ · ✅ **${net.toLocaleString()}₮**`
+      : `💰 **${gross.toLocaleString()}₮**`;
+  };
 
-  // Захирлын тогтмол цалин
-  const directorFields = DIRECTORS.map(d => ({
-    name: `👑 ${d.name}`,
-    value: `💰 **${d.amount.toLocaleString()}₮** (тогтмол)`,
-    inline: false,
-  }));
+  // Ажилтны цалин (өдрөөр, зээл хассан)
+  const netWorkers = {};
+  const workerFields = Object.entries(report.workers).map(([name, data]) => {
+    const adv = advances[name] || 0;
+    netWorkers[name] = { ...data, salary: data.salary - adv };
+    return {
+      name: `👩 ${name}`,
+      value: `📅 ${data.days} өдөр · ⏱ ${data.hours} цаг\n${line(data.salary, adv)}`,
+      inline: false,
+    };
+  });
 
-  const workerTotal = Object.values(report.workers).reduce((s, w) => s + w.salary, 0);
-  const directorTotal = DIRECTORS.reduce((s, d) => s + d.amount, 0);
+  // Захирлын тогтмол цалин (зээл хассан)
+  const netDirectors = DIRECTORS.map(d => ({ ...d, amount: d.amount - (advances[d.name] || 0) }));
+  const directorFields = DIRECTORS.map(d => {
+    const adv = advances[d.name] || 0;
+    return {
+      name: `👑 ${d.name}`,
+      value: adv > 0 ? line(d.amount, adv) : `💰 **${d.amount.toLocaleString()}₮** (тогтмол)`,
+      inline: false,
+    };
+  });
+
+  const workerTotal = Object.values(netWorkers).reduce((s, w) => s + w.salary, 0);
+  const directorTotal = netDirectors.reduce((s, d) => s + d.amount, 0);
   const grandTotal = workerTotal + directorTotal;
 
   if (save) {
-    await saveSalaryToSheet(from, to, report.workers, DIRECTORS);
+    await saveSalaryToSheet(from, to, netWorkers, netDirectors);
   }
 
   const embed = new EmbedBuilder()
