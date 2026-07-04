@@ -3,7 +3,6 @@
 // Урьдчилсан нөхцөл: Gmail дээр IMAP асаах + App Password (2FA шаардана).
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { PDFParse } from 'pdf-parse';
 import { parseTransactionBody, hasAmount, stripHtml, extractBalance } from './bankParser.js';
 import { notifyTransaction } from './discord.js';
 
@@ -25,12 +24,14 @@ export function startGmailPoller() {
   }, POLL_MS);
 }
 
-// PDF хавсралтаас текст гаргах (ХасБанк)
+// PDF хавсралтаас текст гаргах (ХасБанк).
+// pdf-parse-ийг зөвхөн хэрэгтэй үед lazy-load хийнэ (import үед сервер унахаас сэргийлж,
+// lib замаар шууд орж index.js-ийн debug кодыг алгасна).
 async function extractPdfText(buffer) {
   try {
-    const parser = new PDFParse({ data: buffer });
-    const res = await parser.getText();
-    return res.text || '';
+    const { default: pdf } = await import('pdf-parse/lib/pdf-parse.js');
+    const data = await pdf(buffer);
+    return data.text || '';
   } catch (err) {
     console.error('PDF унших алдаа:', err.message);
     return '';

@@ -18,7 +18,7 @@
     "imapflow": "^1.4.3",
     "mailparser": "^3.9.12",
     "node-cron": "^3.0.3",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^1.1.1"
   },
   "engines": {
     "node": ">=18.0.0"
