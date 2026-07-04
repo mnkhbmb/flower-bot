@@ -427,6 +427,43 @@ export async function notifyNewOrder(order) {
   await channel.send({ embeds: [embed] });
 }
 
+// Банкны гүйлгээ (зардал) орж ирэхэд #зардал руу мэдэгдэл
+export async function notifyTransaction(tx) {
+  const channelId = process.env.DISCORD_ZARDAL_CHANNEL_ID;
+  if (!channelId) {
+    console.error('❌ DISCORD_ZARDAL_CHANNEL_ID тохируулаагүй — гүйлгээ явуулсангүй');
+    return;
+  }
+  const channel = await client.channels.fetch(channelId);
+
+  const isIncome = tx.txType === 'Орлого';
+  const sign = isIncome ? '+' : '-';
+  const amountStr = tx.amount != null
+    ? `**${sign}${tx.amount.toLocaleString()}₮**`
+    : '_тодорхойгүй_';
+
+  const embed = new EmbedBuilder()
+    .setColor(isIncome ? 0x2ECC71 : 0xE74C3C)
+    .setTitle(isIncome ? '💵 Шинэ орлого' : '💸 Шинэ зардал')
+    .addFields(
+      { name: '💰 Дүн', value: amountStr, inline: true },
+      { name: '🏦 Банк', value: tx.bank || '—', inline: true },
+      { name: '📅 Огноо', value: tx.date || '—', inline: true },
+      { name: '📝 Утга', value: tx.description || '—', inline: false },
+    )
+    .setTimestamp();
+
+  if (tx.balance != null) {
+    embed.addFields({ name: '🧾 Үлдэгдэл', value: `${tx.balance.toLocaleString()}₮`, inline: true });
+  }
+  // regex дүн олоогүй бол эх и-мэйлийн гарчгийг нэмж харуулна (тохируулахад тус болно)
+  if (!tx.parsed && tx.subject) {
+    embed.setFooter({ text: `⚠️ Дүн автоматаар олдсонгүй · ${tx.subject.slice(0, 80)}` });
+  }
+
+  await channel.send({ embeds: [embed] });
+}
+
 // Өдрийн тайлангийн embed
 function dailyEmbed(r) {
   return new EmbedBuilder()

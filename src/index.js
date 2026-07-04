@@ -4,6 +4,7 @@ import express from 'express';
 import cron from 'node-cron';
 import { handleMessage } from './handlers/orderFlow.js';
 import { startDiscord, sendDailyReport, sendSalaryReminder } from './services/discord.js';
+import { startGmailPoller } from './services/gmail.js';
 
 const app = express();
 app.use(express.json());
@@ -98,6 +99,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`✅ Сервер ${PORT} порт дээр ажиллаж байна`);
   await startDiscord();
+  startGmailPoller();   // Gmail-ийн банкны и-мэйл шалгах (env тохируулсан бол)
 });
 
 // --- CRON: өдөр бүр 22:00-д Discord руу тайлан ---
