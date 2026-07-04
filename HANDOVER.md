@@ -96,6 +96,10 @@ Facebook Messenger + Discord + Google Sheets-тэй холбож автомат�
 | `GOOGLE_PRIVATE_KEY` | Service account-ийн private key |
 | `ANTHROPIC_API_KEY` | Claude Vision + AI чат |
 | `FB_ALBUM_URL` | Баглааны зургийн FB цомгийн линк (заавал биш) |
+| `DISCORD_ZARDAL_CHANNEL_ID` | #зардал (банкны гүйлгээ мэдэгдэл) |
+| `GMAIL_USER` | Банкны и-мэйл ирдэг Gmail хаяг |
+| `GMAIL_APP_PASSWORD` | Gmail App Password (IMAP унших, 2FA шаардана) |
+| `GMAIL_BANK_LABEL` | Банкны и-мэйлд өгсөн label (default: bank-transaction) |
 
 > ⚠️ `GOOGLE_PRIVATE_KEY` нь `-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n`
 > хэлбэртэй, `\n` тэмдэгтүүд хэвээр байх ёстой. Энэ буруу бол `ERR_OSSL_UNSUPPORTED` алдаа гарна.
