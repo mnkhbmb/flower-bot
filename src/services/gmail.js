@@ -3,7 +3,8 @@
 // Урьдчилсан нөхцөл: Gmail дээр IMAP асаах + App Password (2FA шаардана).
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { parseBankEmail } from './bankParser.js';
+import { PDFParse } from 'pdf-parse';
+import { parseTransactionBody, hasAmount, stripHtml, extractBalance } from './bankParser.js';
 import { notifyTransaction } from './discord.js';
 
 const GMAIL_USER = process.env.GMAIL_USER;
@@ -22,6 +23,36 @@ export function startGmailPoller() {
   setInterval(() => {
     checkInbox().catch(err => console.error('Gmail poll алдаа:', err.message));
   }, POLL_MS);
+}
+
+// PDF хавсралтаас текст гаргах (ХасБанк)
+async function extractPdfText(buffer) {
+  try {
+    const parser = new PDFParse({ data: buffer });
+    const res = await parser.getText();
+    return res.text || '';
+  } catch (err) {
+    console.error('PDF унших алдаа:', err.message);
+    return '';
+  }
+}
+
+// Имэйлээс боловсруулах текст сонгох: plain → html → PDF (заавраар)
+async function extractText(parsed) {
+  // 1. text/plain дотор дүн байвал шууд
+  if (parsed.text && hasAmount(parsed.text)) return parsed.text;
+  // 2. text/html → цэвэрлээд дүн байвал (Голомт, ХХБ EBANK)
+  const stripped = stripHtml(parsed.html || '');
+  if (stripped && hasAmount(stripped)) return stripped;
+  // 3. PDF хавсралт (ХасБанк — мэдээлэл зөвхөн тэнд)
+  const pdfs = (parsed.attachments || []).filter(a =>
+    a.contentType === 'application/pdf' || /\.pdf$/i.test(a.filename || ''));
+  for (const a of pdfs) {
+    const txt = await extractPdfText(a.content);
+    if (txt) return txt;
+  }
+  // 4. Fallback — ямар нэг текст
+  return parsed.text || stripped || '';
 }
 
 async function checkInbox() {
@@ -46,12 +77,15 @@ async function checkInbox() {
         try {
           const msg = await client.fetchOne(uid, { source: true }, { uid: true });
           const parsed = await simpleParser(msg.source);
-          const tx = parseBankEmail({
-            from: parsed.from?.text || '',
-            subject: parsed.subject || '',
-            text: parsed.text || parsed.html || '',
-            date: parsed.date || new Date(),
-          });
+          const text = await extractText(parsed);
+          const base = parseTransactionBody(text);
+          const tx = {
+            ...base,
+            date: parsed.date ? new Date(parsed.date).toISOString().slice(0, 10) : '',
+            balance: extractBalance(text),
+            parsed: base.amount != null,
+            subject: (parsed.subject || '').trim(),
+          };
           await notifyTransaction(tx);
         } catch (err) {
           console.error('Gmail нэг и-мэйл боловсруулах алдаа:', err.message);
@@ -63,7 +97,6 @@ async function checkInbox() {
       lock.release();
     }
   } catch (err) {
-    // Label олдохгүй бол ойлгомжтой мэдэгдэл
     if (/mailbox|not.*exist|NONEXISTENT/i.test(err.message)) {
       console.error(`❌ Gmail-д "${LABEL}" label олдсонгүй. Label нэрээ шалга (GMAIL_BANK_LABEL).`);
     } else {
