@@ -11,6 +11,7 @@ async function callSendAPI(payload) {
   if (!res.ok) {
     console.error('FB send error:', await res.text());
   }
+  return res;
 }
 
 // Энгийн текст мессеж
@@ -36,9 +37,10 @@ export async function sendButtons(psid, text, buttons) {
   });
 }
 
-// URL товчтой мессеж (web_url — даравал линк/газрын зураг нээнэ)
+// URL товчтой мессеж (web_url — даравал линк/газрын зураг нээнэ).
+// Instagram button template дэмждэггүй тул бүтэхгүй бол энгийн текстээр илгээнэ.
 export async function sendLinkButton(psid, text, links) {
-  await callSendAPI({
+  const res = await callSendAPI({
     recipient: { id: psid },
     message: {
       attachment: {
@@ -55,6 +57,9 @@ export async function sendLinkButton(psid, text, links) {
       },
     },
   });
+  if (res && !res.ok) {
+    await sendText(psid, `${text}\n${links.map(l => `${l.title}: ${l.url}`).join('\n')}`);
+  }
 }
 
 // Хэрэглэгч бичиж байгаа дохио

@@ -78,11 +78,14 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200); // FB-д шууд хариу өгнө
 
-  if (req.body.object !== 'page') return;
+  // 'page' = Messenger, 'instagram' = Instagram DM (хоёулаа ижил бүтэцтэй ирдэг)
+  if (req.body.object !== 'page' && req.body.object !== 'instagram') return;
 
   for (const entry of req.body.entry) {
-    for (const event of entry.messaging) {
+    for (const event of entry.messaging || []) {
       const psid = event.sender.id;
+      // Ботын өөрийн илгээсэн мессежийн echo-г алгасна (үгүй бол өөртэйгөө яриад давталтад орно)
+      if (event.message?.is_echo) continue;
       if (event.message) {
         try {
           await handleMessage(psid, event.message);
