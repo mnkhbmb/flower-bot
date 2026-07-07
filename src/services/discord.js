@@ -367,6 +367,14 @@ export async function startDiscord() {
     if (!isImage && !isPdf) return;
 
     const processing = await message.reply('⏳ Баримт уншиж байна...');
+    // "⏳" мессеж устгагдсан байвал edit оронд шинэ мессеж илгээнэ (10008-аас сэргийлнэ)
+    const safeEdit = async (payload) => {
+      try {
+        await processing.edit(payload);
+      } catch {
+        await message.channel.send(typeof payload === 'string' ? payload : { ...payload }).catch(() => {});
+      }
+    };
 
     try {
       const invoice = await readInvoice(attachment);
@@ -378,7 +386,7 @@ export async function startDiscord() {
         .join('\n');
       const more = invoice.baraa.length > 10 ? `\n... нийт ${invoice.baraa.length} төрөл` : '';
 
-      await processing.edit({
+      await safeEdit({
         content: '',
         embeds: [
           new EmbedBuilder()
@@ -395,7 +403,7 @@ export async function startDiscord() {
       });
     } catch (err) {
       console.error('Vision error:', err.message, err.status, err.code, err.stack?.slice(0, 300));
-      await processing.edit(`⚠️ Алдаа: ${err.message || 'Тодорхойгүй алдаа'}`);
+      await safeEdit(`⚠️ Алдаа: ${err.message || 'Тодорхойгүй алдаа'}`);
     }
   });
 

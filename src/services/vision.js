@@ -31,7 +31,7 @@ export async function readInvoice(attachment) {
     // PDF
     message = await anthropic.messages.create({
       model: 'claude-opus-4-5',
-      max_tokens: 2000,
+      max_tokens: 8000,
       messages: [{
         role: 'user',
         content: [
@@ -45,7 +45,7 @@ export async function readInvoice(attachment) {
     const mediaType = contentType || 'image/jpeg';
     message = await anthropic.messages.create({
       model: 'claude-opus-4-5',
-      max_tokens: 2000,
+      max_tokens: 8000,
       messages: [{
         role: 'user',
         content: [
@@ -56,8 +56,24 @@ export async function readInvoice(attachment) {
     });
   }
 
+  // Хариу max_tokens-д тайрагдсан бол JSON дутуу тул ойлгомжтой алдаа өгнө
+  if (message.stop_reason === 'max_tokens') {
+    throw new Error('Баримт хэт урт — хариу тайрагдлаа. Баримтыг хэсэгчилж явуулна уу.');
+  }
+
   const text = message.content[0].text.trim();
-  // JSON цэвэрлэх
-  const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  return JSON.parse(jsonStr);
+  // JSON цэвэрлэх — ``` хүрээ арилгаад эхний { -ээс сүүлийн } хүртэлх хэсгийг авна
+  const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) {
+    console.error('Vision хариу JSON биш:', cleaned.slice(0, 300));
+    throw new Error('Баримтаас мэдээлэл гаргаж чадсангүй. Илүү тод зураг явуулна уу.');
+  }
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch (err) {
+    console.error('Vision JSON parse алдаа. Хариу:', cleaned.slice(0, 300));
+    throw new Error('Баримтын мэдээлэл задлахад алдаа гарлаа. Дахин оролдоно уу.');
+  }
 }
