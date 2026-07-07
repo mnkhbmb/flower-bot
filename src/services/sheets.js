@@ -144,17 +144,16 @@ export async function saveBaraa(invoice) {
   const sheet = d.sheetsByTitle['Бараа таталт'];
   if (!sheet) return;
 
-  for (const item of invoice.baraa) {
-    await sheet.addRow({
-      'Огноо':        invoice.ogno || new Date().toISOString().slice(0, 10),
-      'Баримт №':     invoice.barimtNo || '',
-      'Нийлүүлэгч':  invoice.nilluulegch || '',
-      'Бараа нэр':    item.ner || '',
-      'Тоо':          item.too || '',
-      'Нэгж үнэ':    item.negj || '',
-      'Нийт дүн':    item.niit || '',
-    });
-  }
+  // Бүх мөрийг нэг API дуудлагаар нэмнэ (мөр бүрд тус тусад нь бичвэл 429 quota хэтэрдэг)
+  await sheet.addRows(invoice.baraa.map(item => ({
+    'Огноо':        invoice.ogno || new Date().toISOString().slice(0, 10),
+    'Баримт №':     invoice.barimtNo || '',
+    'Нийлүүлэгч':  invoice.nilluulegch || '',
+    'Бараа нэр':    item.ner || '',
+    'Тоо':          item.too || '',
+    'Нэгж үнэ':    item.negj || '',
+    'Нийт дүн':    item.niit || '',
+  })));
 }
 
 // Tab-ыг нэрээр нь (том/жижиг үсэг үл хамааран) олох
@@ -193,13 +192,14 @@ export async function saveHaalt(data) {
     const detail = findSheet(d, 'Хаалт задаргаа');
     if (detail) {
       let isHorogdol = false;
+      const detailRows = [];
       const lines = data.baglaa.split('\n');
       for (const line of lines) {
         // "Хорогдол" гэсэн үгнээс хойшхи мөрүүдийг хорогдол гэж тэмдэглэнэ
         if (/хорогдол/i.test(line)) isHorogdol = true;
         const matches = [...line.matchAll(/([А-ЯӨҮа-яөүA-Za-z\/]+)-(\d+)/g)];
         for (const m of matches) {
-          await detail.addRow({
+          detailRows.push({
             'Огноо':   today,
             'Ажилтан': data.name,
             'Товчлол': m[1],
@@ -208,6 +208,8 @@ export async function saveHaalt(data) {
           });
         }
       }
+      // Нэг API дуудлагаар бүх мөрийг нэмнэ (429 quota-аас сэргийлнэ)
+      if (detailRows.length) await detail.addRows(detailRows);
     }
   }
 }
@@ -220,29 +222,25 @@ export async function saveSalaryToSheet(from, to, workers, directors) {
 
   const period = `${from} ~ ${to}`;
 
-  // Ажилтнуудын цалин
-  for (const [name, data] of Object.entries(workers)) {
-    await sheet.addRow({
+  // Ажилтан + захирлын мөрүүдийг нэг API дуудлагаар бичнэ
+  await sheet.addRows([
+    ...Object.entries(workers).map(([name, data]) => ({
       'Хугацаа': period,
       'Нэр': name,
       'Төрөл': 'Ажилтан',
       'Өдөр': data.days,
       'Цаг': data.hours,
       'Дүн': data.salary,
-    });
-  }
-
-  // Захирлуудын цалин
-  for (const dir of directors) {
-    await sheet.addRow({
+    })),
+    ...directors.map(dir => ({
       'Хугацаа': period,
       'Нэр': dir.name,
       'Төрөл': 'Захирал',
       'Өдөр': '-',
       'Цаг': '-',
       'Дүн': dir.amount,
-    });
-  }
+    })),
+  ]);
 }
 
 // Зээл / урьдчилгаа хадгалах — "Зээл" tab (байхгүй бол үүсгэнэ)
@@ -304,22 +302,37 @@ export async function decreaseAguurlah(baglaaText) {
   const rows = await sheet.getRows();
   const items = parseBaglaa(baglaaText);
   const warnings = [];
+  const updates = new Map();   // rowNumber → шинэ утга
 
   for (const { tovch, too } of items) {
     const row = rows.find(r => r.get('Товчлол') === tovch);
     if (!row) continue;
 
-    const current = Number(row.get('Тоо')) || 0;
+    const current = updates.get(row.rowNumber) ?? (Number(row.get('Тоо')) || 0);
     const newToo = Math.max(0, current - too);
-    row.set('Тоо', newToo);
-    await row.save();
+    updates.set(row.rowNumber, newToo);
 
     const threshold = Number(row.get('Анхааруулгын хэмжээ')) || 0;
     if (newToo <= threshold) {
       warnings.push({ ner: row.get('Бараа нэр'), tovch, too: newToo, threshold });
     }
   }
+
+  await batchSetToo(sheet, updates);   // нэг бичилтээр бүгдийг хадгална
   return warnings;
+}
+
+// "Тоо" баганын олон мөрийг НЭГ API дуудлагаар шинэчлэх (мөр бүрд row.save()
+// дуудвал Google-ийн 60 бичилт/мин quota хэтэрч 429 өгдөг)
+async function batchSetToo(sheet, updates) {
+  if (updates.size === 0) return;
+  const colIdx = sheet.headerValues.indexOf('Тоо');
+  if (colIdx === -1) return;
+  await sheet.loadCells();
+  for (const [rowNumber, value] of updates) {
+    sheet.getCell(rowNumber - 1, colIdx).value = value;
+  }
+  await sheet.saveUpdatedCells();
 }
 
 // Агуулахад нэмэх (бараа таталтаас дуудна)
@@ -329,6 +342,9 @@ export async function increaseAguurlah(invoiceItems) {
   if (!sheet) return;
 
   const rows = await sheet.getRows();
+  const updates = new Map();   // rowNumber → шинэ утга (нэг мөрөнд олон бараа таарвал хуримтлуулна)
+  const newRows = [];
+  let nextNo = rows.length + 1;
 
   for (const item of invoiceItems) {
     const invoiceNer = item.ner?.toLowerCase() || '';
@@ -344,13 +360,12 @@ export async function increaseAguurlah(invoiceItems) {
     });
 
     if (row) {
-      const current = Number(row.get('Тоо')) || 0;
-      row.set('Тоо', current + Number(item.too));
-      await row.save();
+      const current = updates.get(row.rowNumber) ?? (Number(row.get('Тоо')) || 0);
+      updates.set(row.rowNumber, current + Number(item.too));
     } else {
       // Олдоогүй бол шинэ мөр нэмнэ
-      await sheet.addRow({
-        '№': rows.length + 1,
+      newRows.push({
+        '№': nextNo++,
         'Бараа нэр': item.ner,
         'Товчлол': '',
         'Төрөл': 'Цэцэг',
@@ -360,6 +375,10 @@ export async function increaseAguurlah(invoiceItems) {
       });
     }
   }
+
+  // Нийт 2 бичилт: батч update + батч insert
+  await batchSetToo(sheet, updates);
+  if (newRows.length) await sheet.addRows(newRows);
 }
 
 // Агуулахд гараар нэмэх (товчлолоор)
