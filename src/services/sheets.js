@@ -396,6 +396,31 @@ export async function manualAddAguurlah(tovch, too) {
   return { ner: row.get('Бараа нэр'), tovch, oldToo: current, newToo };
 }
 
+// Чатботод санал болгох цэцгийн төрлүүд — "Агуулах" tab-аас (Төрөл = Цэцэг).
+// 5 минут кэшлэнэ (мессеж бүрт Sheets руу хандвал quota идэгдэнэ).
+let flowerCache = { at: 0, items: [] };
+export async function getFlowerTypes() {
+  const now = Date.now();
+  if (now - flowerCache.at < 5 * 60 * 1000 && flowerCache.items.length) {
+    return flowerCache.items;
+  }
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Агуулах'];
+  if (!sheet) return [];
+  const rows = await sheet.getRows();
+  const items = rows
+    .filter(r =>
+      /цэцэг/i.test(r.get('Төрөл') || '') &&
+      (r.get('Бараа нэр') || '').trim()
+    )
+    .map(r => ({
+      name: r.get('Бараа нэр').trim(),
+      stock: Number(r.get('Тоо')) || 0,
+    }));
+  flowerCache = { at: now, items };
+  return items;
+}
+
 // Агуулахын одоогийн байдал
 export async function getAguurlah() {
   const d = await ensureLoaded();

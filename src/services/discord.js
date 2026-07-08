@@ -428,7 +428,7 @@ export async function notifyNewOrder(order) {
     .setDescription(`**${order.name}** · ${order.phone}`)
     .addFields(
       { name: 'Цэцэг', value: `${order.flower} x${order.qty}`, inline: true },
-      { name: 'Үнэ', value: `${(order.qty * order.unitPrice).toLocaleString()}₮`, inline: true },
+      { name: 'Үнэ', value: order.unitPrice ? `${(order.qty * order.unitPrice).toLocaleString()}₮` : 'Ажилтан тогтооно', inline: true },
       { name: 'Хүргэлт', value: order.delivery ? `✅ ${order.address}` : '❌ Очиж авна', inline: true },
     )
     .setTimestamp();

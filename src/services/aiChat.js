@@ -1,6 +1,7 @@
 // AI чат — үйлчлүүлэгчийн чөлөөт асуултад Claude-аар хариулах
 import Anthropic from '@anthropic-ai/sdk';
 import { CATALOG, PAYMENT_INFO, BOUQUET_ALBUM_URL, SHOW_PRICES, SHOP_INFO } from '../config/catalog.js';
+import { getFlowerTypes } from './sheets.js';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -9,7 +10,19 @@ const TEXT_MODEL = 'claude-haiku-4-5-20251001';
 const VISION_MODEL = 'claude-sonnet-4-6';
 
 // Дэлгүүрийн мэдээллийг system prompt болгон бэлдэх
-function shopContext() {
+async function shopContext() {
+  // Агуулахад одоо байгаа цэцгүүд (5 мин кэштэй тул хурдан)
+  let flowerBlock = '';
+  try {
+    const flowers = await getFlowerTypes();
+    const inStock = flowers.filter(f => f.stock > 0).map(f => f.name);
+    if (inStock.length) {
+      flowerBlock = `Одоо байгаа цэцгийн төрлүүд: ${inStock.join(', ')}\n`;
+    }
+  } catch (err) {
+    console.error('AI чат цэцэг унших алдаа:', err.message);
+  }
+
   // Үнэ харуулах горимд л үнийн жагсаалтыг оруулна
   const priceBlock = SHOW_PRICES
     ? `Үнийн жагсаалт:\n${Object.values(CATALOG)
@@ -23,7 +36,7 @@ function shopContext() {
 
   return `Чи бол "La Paradiso" цэцгийн дэлгүүрийн туслах бот. Үйлчлүүлэгчтэй монголоор, эелдэг, товч (1-3 өгүүлбэр) ярь.
 
-${priceBlock}
+${flowerBlock}${priceBlock}
 📍 Хаяг: ${SHOP_INFO.address}
 🕙 Цагийн хуваарь: ${SHOP_INFO.hours}
 🚚 Хүргэлт: ${SHOP_INFO.delivery}
@@ -45,7 +58,7 @@ export async function askAI(history, userText) {
   const res = await anthropic.messages.create({
     model: TEXT_MODEL,
     max_tokens: 500,
-    system: shopContext(),
+    system: await shopContext(),
     messages: [...history, { role: 'user', content: userText }],
   });
   return res.content[0].text.trim();
@@ -66,7 +79,7 @@ export async function priceFromImage(imageUrl) {
   const res = await anthropic.messages.create({
     model: VISION_MODEL,
     max_tokens: 500,
-    system: shopContext(),
+    system: await shopContext(),
     messages: [{
       role: 'user',
       content: [

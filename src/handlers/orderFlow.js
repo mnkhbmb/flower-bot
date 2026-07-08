@@ -1,6 +1,6 @@
 // Захиалгын яриа удирдах — товч дарж сонгох flow
 import { sendText, sendButtons, sendLinkButton, sendTyping } from '../services/messenger.js';
-import { addOrder } from '../services/sheets.js';
+import { addOrder, getFlowerTypes } from '../services/sheets.js';
 import { notifyNewOrder } from '../services/discord.js';
 import { askAI, priceFromImage } from '../services/aiChat.js';
 import { CATALOG, STEPS, PAYMENT_INFO, BOUQUET_ALBUM_URL, SHOW_PRICES, SHOP_INFO } from '../config/catalog.js';
@@ -84,11 +84,15 @@ export async function handleMessage(psid, message) {
   switch (session.step) {
     case STEPS.PICK_FLOWER:
       if (payload?.startsWith('FLOWER_')) {
-        const key = payload.replace('FLOWER_', '');
-        session.order.flowerKey = key;
-        session.order.flower = CATALOG[key].label;
-        session.order.unitPrice = CATALOG[key].unitPrice;
-        return askQty(psid, session);
+        const idx = Number(payload.replace('FLOWER_', ''));
+        const name = session.flowerOptions?.[idx];
+        if (name) {
+          session.order.flower = name;
+          // Агуулахын нэр CATALOG-т байвал үнийг нь авна, үгүй бол ажилтан тогтооно
+          const cat = Object.values(CATALOG).find(v => v.label === name);
+          session.order.unitPrice = cat?.unitPrice ?? 0;
+          return askQty(psid, session);
+        }
       }
       break;
 
@@ -229,12 +233,27 @@ async function handleImage(psid, session, imageUrl) {
 async function askFlower(psid, session) {
   session.step = STEPS.PICK_FLOWER;
   session.order = {};
+
+  // Агуулахаас (Төрөл=Цэцэг, үлдэгдэлтэй) цэцгүүдийг уншина; бүтэхгүй бол CATALOG fallback
+  let options = [];
+  try {
+    const flowers = await getFlowerTypes();
+    options = flowers.filter(f => f.stock > 0).map(f => f.name);
+  } catch (err) {
+    console.error('Цэцгийн жагсаалт унших алдаа:', err.message);
+  }
+  if (options.length === 0) {
+    options = Object.values(CATALOG).map(v => v.label);
+  }
+
+  // Quick reply дээд тал нь 13 товч, гарчиг 20 тэмдэгт
+  session.flowerOptions = options.slice(0, 13);
   await sendButtons(
     psid,
     'Сайн байна уу! Манай цэцгийн дэлгүүрт тавтай морил 🌸\nЯмар цэцэг сонгох вэ?',
-    Object.entries(CATALOG).map(([key, v]) => ({
-      title: v.label,
-      payload: `FLOWER_${key}`,
+    session.flowerOptions.map((name, i) => ({
+      title: name.slice(0, 20),
+      payload: `FLOWER_${i}`,
     }))
   );
 }
