@@ -8,6 +8,12 @@ import { CATALOG, STEPS, PAYMENT_INFO, BOUQUET_ALBUM_URL, SHOW_PRICES, SHOP_INFO
 // Хэрэглэгч бүрийн ярианы төлөв (санах ой). Production-д Redis/DB зөвлөнө.
 const sessions = new Map();
 
+// Захиалгын идэвхтэй алхмууд
+const ORDER_STEPS = [
+  STEPS.PICK_FLOWER, STEPS.PICK_QTY, STEPS.PICK_DELIVERY,
+  STEPS.ASK_NAME, STEPS.ASK_PHONE, STEPS.ASK_ADDRESS, STEPS.CONFIRM,
+];
+
 function getSession(psid) {
   if (!sessions.has(psid)) {
     sessions.set(psid, { step: STEPS.START, order: {} });
@@ -66,13 +72,14 @@ export async function handleMessage(psid, message) {
     return showMenu(psid, session);
   }
 
+  // Хаанаас ч "меню" гэж бичихэд эхний цэс рүү буцна
+  if (text && /^(меню|menu|цэс|эхлэх|start)$/i.test(text)) {
+    return showMenu(psid, session);
+  }
+
   // Зураг ирвэл
   if (imageUrl) {
     // Захиалгын дундуур бол flow-г эвдэхгүй — зургийг тэмдэглэлд хадгалаад үргэлжлүүлнэ
-    const ORDER_STEPS = [
-      STEPS.PICK_FLOWER, STEPS.PICK_QTY, STEPS.PICK_DELIVERY,
-      STEPS.ASK_NAME, STEPS.ASK_PHONE, STEPS.ASK_ADDRESS, STEPS.CONFIRM,
-    ];
     if (ORDER_STEPS.includes(session.step)) {
       session.order.note = [session.order.note, `Зураг: ${imageUrl}`].filter(Boolean).join(' | ');
       await sendText(psid, 'Зургийг хүлээн авлаа 📸 Ажилтан захиалгатай тань хамт харна.');
@@ -178,8 +185,13 @@ export async function handleMessage(psid, message) {
       break;
   }
 
-  // Ойлгомжгүй мессежид
-  await sendText(psid, 'Уучлаарай, ойлгосонгүй. Доорх товчийг дарна уу 🌸');
+  // Ойлгомжгүй мессежид — товчнууд алга болсон байж болзошгүй тул
+  // одоогийн алхмыг товчтой нь дахин үзүүлнэ (гацахаас сэргийлнэ)
+  if (ORDER_STEPS.includes(session.step)) {
+    await sendText(psid, 'Уучлаарай, ойлгосонгүй 🌸');
+    return repeatStep(psid, session);
+  }
+  return showMenu(psid, session);
 }
 
 // ===== ЦЭС БА AI ЧАТ =====
