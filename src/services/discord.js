@@ -432,6 +432,10 @@ export async function notifyNewOrder(order) {
       { name: 'Хүргэлт', value: order.delivery ? `✅ ${order.address}` : '❌ Очиж авна', inline: true },
     )
     .setTimestamp();
+  // Харилцагчийн явуулсан зураг/тэмдэглэл байвал хавсаргана
+  if (order.note) {
+    embed.addFields({ name: '📝 Тэмдэглэл', value: order.note.slice(0, 1000), inline: false });
+  }
   await channel.send({ embeds: [embed] });
 }
 

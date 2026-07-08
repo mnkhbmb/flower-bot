@@ -66,8 +66,19 @@ export async function handleMessage(psid, message) {
     return showMenu(psid, session);
   }
 
-  // Зураг ирвэл — хаанаас ч барагцаа үнэ хэлж AI горимд оруулна
+  // Зураг ирвэл
   if (imageUrl) {
+    // Захиалгын дундуур бол flow-г эвдэхгүй — зургийг тэмдэглэлд хадгалаад үргэлжлүүлнэ
+    const ORDER_STEPS = [
+      STEPS.PICK_FLOWER, STEPS.PICK_QTY, STEPS.PICK_DELIVERY,
+      STEPS.ASK_NAME, STEPS.ASK_PHONE, STEPS.ASK_ADDRESS, STEPS.CONFIRM,
+    ];
+    if (ORDER_STEPS.includes(session.step)) {
+      session.order.note = [session.order.note, `Зураг: ${imageUrl}`].filter(Boolean).join(' | ');
+      await sendText(psid, 'Зургийг хүлээн авлаа 📸 Ажилтан захиалгатай тань хамт харна.');
+      return repeatStep(psid, session);
+    }
+    // Бусад үед — барагцаа тайлбар хэлж AI горимд оруулна
     return handleImage(psid, session, imageUrl);
   }
 
@@ -128,6 +139,11 @@ export async function handleMessage(psid, message) {
     case STEPS.ASK_NAME:
       if (!text) {
         await sendText(psid, 'Нэрээ бичиж илгээнэ үү 🌸');
+        return;
+      }
+      // Асуулт эсвэл хэт урт өгүүлбэр нэр биш байх магадлалтай
+      if (text.includes('?') || text.length > 40) {
+        await sendText(psid, 'Зөвхөн нэрээ бичиж илгээнэ үү 🌸 (жишээ: Болормаа)');
         return;
       }
       session.order.name = text;
@@ -225,6 +241,24 @@ async function handleImage(psid, session, imageUrl) {
   } catch (err) {
     console.error('Image price error:', err.message);
     await sendText(psid, 'Зургийг уншиж чадсангүй. Ажилтан тань тун удахгүй хариулна 🌸');
+  }
+}
+
+// Одоогийн алхмын асуултыг дахин асуух (зураг г.м завсарласны дараа)
+async function repeatStep(psid, session) {
+  switch (session.step) {
+    case STEPS.PICK_FLOWER: {
+      const note = session.order.note;   // askFlower order-г шинэчилдэг тул тэмдэглэлийг хадгална
+      await askFlower(psid, session);
+      session.order.note = note;
+      return;
+    }
+    case STEPS.PICK_QTY:       return askQty(psid, session);
+    case STEPS.PICK_DELIVERY:  return askDelivery(psid, session);
+    case STEPS.ASK_NAME:       return askName(psid, session);
+    case STEPS.ASK_PHONE:      return askPhone(psid, session);
+    case STEPS.ASK_ADDRESS:    return askAddress(psid, session);
+    case STEPS.CONFIRM:        return showConfirm(psid, session);
   }
 }
 
