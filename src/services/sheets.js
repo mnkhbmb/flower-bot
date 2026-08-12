@@ -91,6 +91,24 @@ export async function logAttendance(name, type) {
 }
 
 // Цалингийн тооцоо
+// Цагийн бичвэрийг минут болгох. "9:52", "10:00:00 AM", "20:15" бүгдийг ойлгоно.
+function toMinutes(t) {
+  if (!t) return null;
+  const m = String(t).trim().match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const ampm = m[3]?.toUpperCase();
+  if (ampm === 'PM' && h !== 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return h * 60 + Number(m[2]);
+}
+
+// Минутыг "09:52" болгож буцаах (задаргаанд харуулахад)
+function fmtTime(min) {
+  if (min == null) return null;
+  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+}
+
 export async function getSalaryReport(from, to, exclude = []) {
   const d = await ensureLoaded();
   const sheet = d.sheetsByTitle['Ирц'];
@@ -98,42 +116,54 @@ export async function getSalaryReport(from, to, exclude = []) {
 
   const DAILY_RATE = 71500;
 
-  // Хугацааны мужид багтах, ажилтны нэртэй мөрүүд
-  const inRange = rows.filter(r => {
-    const date = r.get('Огноо');
-    const name = (r.get('Ажилтан') || '').trim();
-    return name && date >= from && date <= to;
-  });
+  // Нэг ажилтны нэг өдрийг НЭГ л удаа тоолно — давхар бүртгэлийг огноогоор нэгтгэж,
+  // хамгийн эрт ирсэн / хамгийн орой гарсан цагийг авна.
+  const byPerson = new Map();   // нэр → Map(огноо → { in, out, rows })
+  for (const r of rows) {
+    const date = String(r.get('Огноо') || '').trim();
+    const name = String(r.get('Ажилтан') || '').trim();
+    if (!name || !date || date < from || date > to) continue;
+    if (exclude.includes(name)) continue;
 
-  // Sheet дээрх бүх ажилтны нэрсийг динамикаар цуглуулна (hardcode хийхгүй).
-  // Ингэснээр Discord username эсвэл бодит нэр ямар ч байсан таарна.
-  const names = [...new Set(inRange.map(r => (r.get('Ажилтан') || '').trim()))]
-    .filter(n => n && !exclude.includes(n));
+    const inM = toMinutes(r.get('Ирсэн цаг'));
+    const outM = toMinutes(r.get('Гарсан цаг'));
+    if (inM == null && outM == null) continue;   // хоосон мөр
+
+    if (!byPerson.has(name)) byPerson.set(name, new Map());
+    const days = byPerson.get(name);
+    const day = days.get(date) || { in: null, out: null, rows: 0 };
+    day.rows++;
+    if (inM != null && (day.in == null || inM < day.in)) day.in = inM;
+    if (outM != null && (day.out == null || outM > day.out)) day.out = outM;
+    days.set(date, day);
+  }
 
   const result = {};
-  for (const name of names) {
-    // Ирсэн + гарсан цаг хоёулаа бүртгэлтэй өдрүүдийг тоолно
-    const days = inRange.filter(r =>
-      (r.get('Ажилтан') || '').trim() === name &&
-      r.get('Ирсэн цаг') &&
-      r.get('Гарсан цаг')
-    );
-
-    // Нийт цаг тооцох
+  for (const [name, days] of byPerson) {
     let totalMinutes = 0;
-    for (const r of days) {
-      const inTime = r.get('Ирсэн цаг');
-      const outTime = r.get('Гарсан цаг');
-      if (inTime && outTime) {
-        const [inH, inM] = inTime.split(':').map(Number);
-        const [outH, outM] = outTime.split(':').map(Number);
-        totalMinutes += (outH * 60 + outM) - (inH * 60 + inM);
+    const detail = [];
+
+    for (const date of [...days.keys()].sort()) {
+      const day = days.get(date);
+      // Хоёр цаг хоёулаа байвал л цагийг тооцно; өдөр нь аль нэг нь байхад тоологдоно
+      if (day.in != null && day.out != null && day.out > day.in) {
+        totalMinutes += day.out - day.in;
       }
+      detail.push({
+        date,
+        in: fmtTime(day.in),
+        out: fmtTime(day.out),
+        complete: day.in != null && day.out != null,
+        duplicated: day.rows > 1,
+      });
     }
 
-    const totalHours = (totalMinutes / 60).toFixed(1);
-    const salary = days.length * DAILY_RATE;
-    result[name] = { days: days.length, hours: totalHours, salary };
+    result[name] = {
+      days: detail.length,
+      hours: (totalMinutes / 60).toFixed(1),
+      salary: detail.length * DAILY_RATE,
+      detail,
+    };
   }
   return { from, to, workers: result };
 }

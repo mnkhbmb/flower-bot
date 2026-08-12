@@ -281,8 +281,8 @@ export async function startDiscord() {
       await interaction.deferReply();
       try {
         const { from, to } = getSalaryPeriod();
-        const embed = await buildSalaryEmbed(from, to, { save: false });
-        await interaction.editReply({ embeds: [embed] });
+        const embeds = await buildSalaryEmbed(from, to, { save: false });
+        await interaction.editReply({ embeds });
       } catch (err) {
         console.error('tsalin error:', err.message);
         await interaction.editReply('⚠️ Цалин тооцоход алдаа гарлаа.');
@@ -578,13 +578,35 @@ async function buildSalaryEmbed(from, to, { save = false } = {}) {
     .addFields({ name: '─────────────', value: `**Нийт: ${grandTotal.toLocaleString()}₮**`, inline: false })
     .setTimestamp();
 
-  return embed;
+  return [embed, attendanceEmbed(report)];
+}
+
+// Ирцийн задаргаа — өдөр бүрийн ирсэн/гарсан цаг (цалинтай хамт явна)
+function attendanceEmbed(report) {
+  const fields = Object.entries(report.workers).map(([name, data]) => {
+    const lines = data.detail.map(dd => {
+      const day = dd.date.slice(5);                       // "2026-08-05" → "08-05"
+      const inT = dd.in || '⚠️ —';
+      const outT = dd.out || '⚠️ —';
+      return `\`${day}\` ${inT} → ${outT}${dd.duplicated ? '  🔁' : ''}`;
+    });
+    let value = lines.join('\n') || 'Бүртгэл алга';
+    if (value.length > 1000) value = value.slice(0, 1000) + '\n…';
+    return { name: `👩 ${name} — ${data.days} өдөр`, value, inline: false };
+  });
+
+  return new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('📋 Ирцийн задаргаа')
+    .addFields(fields.length ? fields : [{ name: 'Ирц', value: 'Бүртгэл алга', inline: false }])
+    .setFooter({ text: '⚠️ = цаг бүртгэгдээгүй · 🔁 = тухайн өдөр давхар бүртгэгдсэн' })
+    .setTimestamp();
 }
 
 // Цалингийн сануулга — сарын 10, 25-нд 12:00-д (cron). Sheet-д хадгална.
 export async function sendSalaryReminder() {
   const channel = await client.channels.fetch(process.env.DISCORD_SALARY_CHANNEL_ID);
   const { from, to } = getSalaryPeriod();
-  const embed = await buildSalaryEmbed(from, to, { save: true });
-  await channel.send({ embeds: [embed] });
+  const embeds = await buildSalaryEmbed(from, to, { save: true });
+  await channel.send({ embeds });
 }
