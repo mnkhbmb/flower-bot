@@ -493,7 +493,10 @@ function dailyEmbed(r) {
     .setTimestamp();
 }
 
-// Cron-оос дуудах — өдрийн тайлан автомат
+// Өдрийн тайланг #өдрийн-тайлан руу түлхэх.
+// 22:00-ийн автомат cron-ыг зогсоосон тул одоо дуудагддаггүй —
+// тайланг `/report` командаар хүссэн үедээ харна. Дахин автоматжуулах бол
+// index.js-д cron.schedule нэмнэ.
 export async function sendDailyReport() {
   const channel = await client.channels.fetch(process.env.DISCORD_REPORT_CHANNEL_ID);
   const r = await getDailyReport();
@@ -601,6 +604,25 @@ function attendanceEmbed(report) {
     .addFields(fields.length ? fields : [{ name: 'Ирц', value: 'Бүртгэл алга', inline: false }])
     .setFooter({ text: '⚠️ = цаг бүртгэгдээгүй · 🔁 = тухайн өдөр давхар бүртгэгдсэн' })
     .setTimestamp();
+}
+
+// Өдрийн хаалтын сануулга — өдөр бүр 20:00-д #өдрийн-хаалт руу
+export async function sendHaaltReminder() {
+  const channel = await client.channels.fetch(process.env.DISCORD_HAALT_CHANNEL_ID);
+  await channel.send({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xE67E22)
+        .setTitle('🔔 Өдрийн хаалт бүртгүүлээрэй')
+        .setDescription(
+          'Ажлын өдөр дуусч байна 🌸\n\n' +
+          '**1.** `/haalt` — өдрийн хаалтаа оруулна уу\n' +
+          '**2.** `/irts` → 🔴 Гарлаа — гарсан цагаа бүртгүүлнэ үү\n\n' +
+          '_Гарсан цаг бүртгэгдээгүй бол цалингийн тооцоонд дутуу харагдана._'
+        )
+        .setTimestamp()
+    ]
+  });
 }
 
 // Цалингийн сануулга — сарын 10, 25-нд 12:00-д (cron). Sheet-д хадгална.

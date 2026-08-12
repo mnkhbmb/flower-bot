@@ -3,7 +3,7 @@ import 'dotenv/config';
 import express from 'express';
 import cron from 'node-cron';
 import { handleMessage } from './handlers/orderFlow.js';
-import { startDiscord, sendDailyReport, sendSalaryReminder } from './services/discord.js';
+import { startDiscord, sendHaaltReminder, sendSalaryReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
 
 const app = express();
@@ -105,14 +105,14 @@ app.listen(PORT, async () => {
   startGmailPoller();   // Gmail-ийн банкны и-мэйл шалгах (env тохируулсан бол)
 });
 
-// --- CRON: өдөр бүр 22:00-д Discord руу тайлан ---
-// UTC+8 → 14:00 UTC = 22:00 Улаанбаатар
-cron.schedule('0 14 * * *', async () => {
-  console.log('📊 Өдрийн тайлан илгээж байна...');
+// --- CRON: өдөр бүр 20:00-д хаалт/гарлаа бүртгүүлэх сануулга ---
+// UTC+8 → 12:00 UTC = 20:00 Улаанбаатар (дэлгүүр хаах цаг)
+cron.schedule('0 12 * * *', async () => {
+  console.log('🔔 Хаалтын сануулга илгээж байна...');
   try {
-    await sendDailyReport();
+    await sendHaaltReminder();
   } catch (err) {
-    console.error('Тайлан алдаа:', err);
+    console.error('Хаалтын сануулга алдаа:', err);
   }
 });
 
