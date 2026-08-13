@@ -614,12 +614,7 @@ export async function sendHaaltReminder() {
       new EmbedBuilder()
         .setColor(0xE67E22)
         .setTitle('🔔 Өдрийн хаалт бүртгүүлээрэй')
-        .setDescription(
-          'Ажлын өдөр дуусч байна 🌸\n\n' +
-          '**1.** `/haalt` — өдрийн хаалтаа оруулна уу\n' +
-          '**2.** `/irts` → 🔴 Гарлаа — гарсан цагаа бүртгүүлнэ үү\n\n' +
-          '_Гарсан цаг бүртгэгдээгүй бол цалингийн тооцоонд дутуу харагдана._'
-        )
+        .setDescription('Ажлын өдөр дуусч байна 🌸')
         .setTimestamp()
     ]
   });
