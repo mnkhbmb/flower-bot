@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport } from './sheets.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -581,7 +581,15 @@ async function buildSalaryEmbed(from, to, { save = false } = {}) {
     .addFields({ name: '─────────────', value: `**Нийт: ${grandTotal.toLocaleString()}₮**`, inline: false })
     .setTimestamp();
 
-  return [embed, attendanceEmbed(report)];
+  // Тухайн хугацааны орлого/зарлага (Өдрийн хаалт tab-аас)
+  let financeEmbeds = [];
+  try {
+    financeEmbeds = [financeEmbed(await getPeriodReport(from, to))];
+  } catch (err) {
+    console.error('Хугацааны орлого унших алдаа:', err.message);
+  }
+
+  return [embed, attendanceEmbed(report), ...financeEmbeds];
 }
 
 // Ирцийн задаргаа — өдөр бүрийн ирсэн/гарсан цаг (цалинтай хамт явна)
@@ -618,6 +626,24 @@ export async function sendHaaltReminder() {
         .setTimestamp()
     ]
   });
+}
+
+// Хугацааны орлого/зарлагын нэгтгэл — цалингийн мессежтэй хамт явна
+function financeEmbed(r) {
+  const mn = n => `${n.toLocaleString()}₮`;
+  return new EmbedBuilder()
+    .setColor(0x34A853)
+    .setTitle(`💰 Орлого / Зарлага — ${r.from} ~ ${r.to}`)
+    .addFields(
+      { name: '💰 Нийт орлого', value: mn(r.niit), inline: true },
+      { name: '🧾 Зарлага', value: mn(r.zarlaga), inline: true },
+      { name: '✅ Цэвэр орлого', value: `**${mn(r.tsever)}**`, inline: true },
+      { name: '💵 Бэлэн', value: mn(r.belen), inline: true },
+      { name: '🏦 Данс', value: mn(r.dans), inline: true },
+      { name: '💳 Пос', value: mn(r.pos), inline: true },
+    )
+    .setFooter({ text: `${r.days} өдрийн ${r.count} удаагийн хаалт` })
+    .setTimestamp();
 }
 
 // Цалингийн сануулга — сарын 10, 25-нд 12:00-д (cron). Sheet-д хадгална.

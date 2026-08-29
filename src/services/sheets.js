@@ -487,3 +487,32 @@ export async function getDailyReport(dateStr) {
 
   return { date: target, count: todays.length, niit, belen, dans, pos, zarlaga, tsever };
 }
+
+// Хугацааны орлого/зарлагын нэгтгэл — "Өдрийн хаалт" tab-аас (цалингийн тайланд)
+export async function getPeriodReport(from, to) {
+  const d = await ensureLoaded();
+  const sheet = findSheet(d, 'Өдрийн хаалт');
+  const empty = { from, to, count: 0, days: 0, niit: 0, belen: 0, dans: 0, pos: 0, zarlaga: 0, tsever: 0 };
+  if (!sheet) return empty;
+
+  const rows = await sheet.getRows();
+  // Таслалтай бичсэн тоог ("1,200,000") ч зөв уншина
+  const num = v => Number(String(v ?? '').replace(/[^\d.-]/g, '')) || 0;
+
+  const inRange = rows.filter(r => {
+    const date = String(r.get('Огноо') || '').trim();
+    return date && date >= from && date <= to;
+  });
+
+  const acc = { ...empty, count: inRange.length };
+  for (const r of inRange) {
+    acc.niit    += num(r.get('Нийт орлого'));
+    acc.belen   += num(r.get('Бэлэн'));
+    acc.dans    += num(r.get('Данс'));
+    acc.pos     += num(r.get('Пос'));
+    acc.zarlaga += num(r.get('Зарлага нийт'));
+    acc.tsever  += num(r.get('Цэвэр орлого'));
+  }
+  acc.days = new Set(inRange.map(r => String(r.get('Огноо')).trim())).size;
+  return acc;
+}
