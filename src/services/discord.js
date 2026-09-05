@@ -634,7 +634,7 @@ export async function sendBaraaReminder() {
   const channel = await client.channels.fetch(process.env.DISCORD_BARAA_CHANNEL_ID);
   const roleId = process.env.DISCORD_BARAA_ROLE_ID || '1510417114983432413';
   await channel.send({
-    content: roleId ? `<@&${roleId}>` : undefined,
+    content: roleId ? `<@&${roleId}> Захирлуудаа` : 'Захирлуудаа',
     allowedMentions: { roles: roleId ? [roleId] : [] },
     embeds: [
       new EmbedBuilder()
