@@ -628,11 +628,11 @@ export async function sendHaaltReminder() {
   });
 }
 
-// Бараа таталтын сануулга — 7 хоног тутам #бараа-таталт руу.
+// Бараа таталтын сануулга — өдөр бүр 14:00-д #бараа-таталт руу.
 // DISCORD_BARAA_ROLE_ID тохируулсан бол тэр role-г mention хийнэ.
 export async function sendBaraaReminder() {
   const channel = await client.channels.fetch(process.env.DISCORD_BARAA_CHANNEL_ID);
-  const roleId = process.env.DISCORD_BARAA_ROLE_ID;
+  const roleId = process.env.DISCORD_BARAA_ROLE_ID || '1510417114983432413';
   await channel.send({
     content: roleId ? `<@&${roleId}>` : undefined,
     allowedMentions: { roles: roleId ? [roleId] : [] },
@@ -640,7 +640,7 @@ export async function sendBaraaReminder() {
       new EmbedBuilder()
         .setColor(0x9B59B6)
         .setTitle('📦 Бараа таталтаа оруулаарай')
-        .setDescription('Энэ 7 хоногийн бараа таталтын баримтаа (зураг/PDF) энэ суваг руу хаяарай 🌸')
+        .setDescription('Захирлуудаа, бараа таталтын баримтаа (зураг/PDF) энэ суваг руу хаяарай 🌸')
         .setTimestamp()
     ]
   });
