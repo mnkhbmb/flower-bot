@@ -100,6 +100,7 @@ Facebook Messenger + Discord + Google Sheets-тэй холбож автомат�
 | `GMAIL_USER` | Банкны и-мэйл ирдэг Gmail хаяг |
 | `GMAIL_APP_PASSWORD` | Gmail App Password (IMAP унших, 2FA шаардана) |
 | `GMAIL_BANK_LABEL` | Банкны и-мэйлд өгсөн label (default: bank-transaction) |
+| `DISCORD_BARAA_ROLE_ID` | 7 хоногийн бараа таталтын сануулгад mention хийх role (заавал биш) |
 
 > ⚠️ `GOOGLE_PRIVATE_KEY` нь `-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n`
 > хэлбэртэй, `\n` тэмдэгтүүд хэвээр байх ёстой. Энэ буруу бол `ERR_OSSL_UNSUPPORTED` алдаа гарна.

@@ -3,7 +3,7 @@ import 'dotenv/config';
 import express from 'express';
 import cron from 'node-cron';
 import { handleMessage } from './handlers/orderFlow.js';
-import { startDiscord, sendHaaltReminder, sendSalaryReminder } from './services/discord.js';
+import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
 
 const app = express();
@@ -124,5 +124,16 @@ cron.schedule('0 4 10,25 * *', async () => {
     await sendSalaryReminder();
   } catch (err) {
     console.error('Цалин сануулга алдаа:', err);
+  }
+});
+
+// --- CRON: Даваа гараг бүр 10:00-д бараа таталтын сануулга ---
+// UTC+8 → 02:00 UTC Даваа = 10:00 Улаанбаатар
+cron.schedule('0 2 * * 1', async () => {
+  console.log('📦 Бараа таталтын сануулга илгээж байна...');
+  try {
+    await sendBaraaReminder();
+  } catch (err) {
+    console.error('Бараа сануулга алдаа:', err);
   }
 });
