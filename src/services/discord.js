@@ -659,6 +659,9 @@ function financeEmbed(r) {
       { name: '💵 Бэлэн', value: mn(r.belen), inline: true },
       { name: '🏦 Данс', value: mn(r.dans), inline: true },
       { name: '💳 Пос', value: mn(r.pos), inline: true },
+      { name: '📦 Бараа таталт', value: mn(r.baraa || 0), inline: true },
+      { name: '💎 Бараа хассан ашиг', value: `**${mn(r.tsever - (r.baraa || 0))}**`, inline: true },
+      { name: '​', value: '​', inline: true },
     )
     .setFooter({ text: `${r.days} өдрийн ${r.count} удаагийн хаалт` })
     .setTimestamp();
