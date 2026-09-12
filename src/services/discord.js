@@ -84,24 +84,13 @@ export async function startDiscord() {
         await interaction.deferReply();
         const name = interaction.user.displayName || interaction.user.username;
         const baglaa   = interaction.fields.getTextInputValue('baglaa');
-        const niit     = Number(interaction.fields.getTextInputValue('niit').replace(/[^\d]/g, '')) || 0;
         const belen    = Number(interaction.fields.getTextInputValue('belen').replace(/[^\d]/g, '')) || 0;
-        const dansPosRaw = interaction.fields.getTextInputValue('dans_pos');
+        const dans     = Number(interaction.fields.getTextInputValue('dans').replace(/[^\d]/g, '')) || 0;
+        const pos      = Number(interaction.fields.getTextInputValue('pos').replace(/[^\d]/g, '')) || 0;
         const zarlaga  = interaction.fields.getTextInputValue('zarlaga');
 
-        // Данс | Пос задлах. '|' байхгүй бол зай/мөрөөр тусгаарласан тоонуудыг
-        // тус тусад нь таана — үгүй бол цифрүүд наалдаж аварга тоо үүсдэг байсан.
-        let dans = 0, pos = 0;
-        if (dansPosRaw.includes('|')) {
-          const [dansStr, posStr] = dansPosRaw.split('|').map(s => s.trim());
-          dans = Number(dansStr?.replace(/[^\d]/g, '')) || 0;
-          pos  = Number(posStr?.replace(/[^\d]/g, ''))  || 0;
-        } else {
-          const nums = (dansPosRaw.match(/\d[\d,.]*/g) || [])
-            .map(x => Number(x.replace(/[^\d]/g, '')) || 0);
-          dans = nums[0] || 0;
-          pos  = nums[1] || 0;
-        }
+        // Нийт орлого = Бэлэн + Данс + Пос (гараар оруулахгүй, алдаа гарахгүй)
+        const niit = belen + dans + pos;
 
         // Зарлагын нийт тооцох
         const zarlLines = zarlaga.split('\n').filter(l => l.trim());
@@ -192,13 +181,8 @@ export async function startDiscord() {
         .setPlaceholder('1. Са-3 Ро-2 /Б/\n2. Уг-5 /П/')
         .setRequired(false);
 
-      const niitInput = new TextInputBuilder()
-        .setCustomId('niit')
-        .setLabel('Нийт орлого')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('632500')
-        .setRequired(true);
-
+      // Нийт орлогыг гараар авахгүй — Бэлэн + Данс + Пос-оос автоматаар бодно
+      // (Discord modal 5 талбарын хязгаартай тул Данс, Пос-ыг салгахын тулд)
       const belenInput = new TextInputBuilder()
         .setCustomId('belen')
         .setLabel('Бэлэн')
@@ -206,11 +190,18 @@ export async function startDiscord() {
         .setPlaceholder('149500')
         .setRequired(false);
 
-      const dansPosInput = new TextInputBuilder()
-        .setCustomId('dans_pos')
-        .setLabel('Данс | Пос  (|  -р тусгаарлана)')
+      const dansInput = new TextInputBuilder()
+        .setCustomId('dans')
+        .setLabel('Данс')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('433000 | 50000')
+        .setPlaceholder('433000')
+        .setRequired(false);
+
+      const posInput = new TextInputBuilder()
+        .setCustomId('pos')
+        .setLabel('Пос')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('50000')
         .setRequired(false);
 
       const zarlagaInput = new TextInputBuilder()
@@ -222,9 +213,9 @@ export async function startDiscord() {
 
       modal.addComponents(
         new ActionRowBuilder().addComponents(baglaaInput),
-        new ActionRowBuilder().addComponents(niitInput),
         new ActionRowBuilder().addComponents(belenInput),
-        new ActionRowBuilder().addComponents(dansPosInput),
+        new ActionRowBuilder().addComponents(dansInput),
+        new ActionRowBuilder().addComponents(posInput),
         new ActionRowBuilder().addComponents(zarlagaInput),
       );
 
