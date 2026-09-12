@@ -89,10 +89,19 @@ export async function startDiscord() {
         const dansPosRaw = interaction.fields.getTextInputValue('dans_pos');
         const zarlaga  = interaction.fields.getTextInputValue('zarlaga');
 
-        // Данс | Пос задлах
-        const [dansStr, posStr] = dansPosRaw.split('|').map(s => s.trim());
-        const dans = Number(dansStr?.replace(/[^\d]/g, '')) || 0;
-        const pos  = Number(posStr?.replace(/[^\d]/g, ''))  || 0;
+        // Данс | Пос задлах. '|' байхгүй бол зай/мөрөөр тусгаарласан тоонуудыг
+        // тус тусад нь таана — үгүй бол цифрүүд наалдаж аварга тоо үүсдэг байсан.
+        let dans = 0, pos = 0;
+        if (dansPosRaw.includes('|')) {
+          const [dansStr, posStr] = dansPosRaw.split('|').map(s => s.trim());
+          dans = Number(dansStr?.replace(/[^\d]/g, '')) || 0;
+          pos  = Number(posStr?.replace(/[^\d]/g, ''))  || 0;
+        } else {
+          const nums = (dansPosRaw.match(/\d[\d,.]*/g) || [])
+            .map(x => Number(x.replace(/[^\d]/g, '')) || 0);
+          dans = nums[0] || 0;
+          pos  = nums[1] || 0;
+        }
 
         // Зарлагын нийт тооцох
         const zarlLines = zarlaga.split('\n').filter(l => l.trim());
