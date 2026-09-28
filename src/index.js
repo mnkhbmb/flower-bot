@@ -2,7 +2,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cron from 'node-cron';
-import { handleMessage } from './handlers/orderFlow.js';
+import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
 import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
 
@@ -83,9 +83,15 @@ app.post('/webhook', async (req, res) => {
 
   for (const entry of req.body.entry) {
     for (const event of entry.messaging || []) {
+      // Echo = хуудаснаас илгээгдсэн мессеж. app_id байхгүй бол ажилтан
+      // Page Inbox-оос гараар бичсэн гэсэн үг — ботыг түр зогсооно.
+      // (Echo дээр recipient.id нь хэрэглэгчийн PSID, sender.id нь хуудас.)
+      if (event.message?.is_echo) {
+        if (!event.message.app_id) pauseForHuman(event.recipient.id);
+        continue;
+      }
+
       const psid = event.sender.id;
-      // Ботын өөрийн илгээсэн мессежийн echo-г алгасна (үгүй бол өөртэйгөө яриад давталтад орно)
-      if (event.message?.is_echo) continue;
       if (event.message) {
         try {
           await handleMessage(psid, event.message);

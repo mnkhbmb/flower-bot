@@ -14,6 +14,33 @@ const ORDER_STEPS = [
   STEPS.ASK_NAME, STEPS.ASK_PHONE, STEPS.ASK_ADDRESS, STEPS.CONFIRM,
 ];
 
+// Ажилтан гараар хариулсан үед бот тухайн хэрэглэгчид түр чимээгүй болно.
+// psid → хэдэн хүртэл зогсохыг (ms) хадгална.
+const humanPause = new Map();
+const HUMAN_PAUSE_MS = 2 * 60 * 60 * 1000;   // 2 цаг
+
+// Page Inbox-оос ажилтан бичихэд дуудагдана (index.js доторх echo боловсруулалт)
+export function pauseForHuman(psid) {
+  humanPause.set(psid, Date.now() + HUMAN_PAUSE_MS);
+  console.log(`⏸️ Ажилтан хариулсан тул бот түр зогслоо: ${psid}`);
+}
+
+// Бот зогссон эсэх. Хэрэглэгч "бот" гэж бичвэл шууд сэргэнэ.
+function isPausedForHuman(psid, text) {
+  const until = humanPause.get(psid);
+  if (!until) return false;
+  if (Date.now() > until) {
+    humanPause.delete(psid);
+    return false;
+  }
+  if (text && /^(бот|bot)$/i.test(text)) {
+    humanPause.delete(psid);
+    console.log(`▶️ Хэрэглэгч дуудсан тул бот сэргэлээ: ${psid}`);
+    return false;
+  }
+  return true;
+}
+
 function getSession(psid) {
   if (!sessions.has(psid)) {
     sessions.set(psid, { step: STEPS.START, order: {} });
@@ -30,12 +57,15 @@ function normalizePhone(text) {
 
 // Бүх ирсэн мессежийг энд чиглүүлнэ
 export async function handleMessage(psid, message) {
-  const session = getSession(psid);
-  await sendTyping(psid);
-
   const payload = message.quick_reply?.payload;
   const text = message.text?.trim();
   const imageUrl = message.attachments?.find(a => a.type === 'image')?.payload?.url;
+
+  // Ажилтан яриаг аваад байгаа бол бот огт хөндлөнгөөс орохгүй
+  if (isPausedForHuman(psid, text)) return;
+
+  const session = getSession(psid);
+  await sendTyping(psid);
 
   // Захиалга эхлүүлэх товч — хаанаас ч ажиллана (AI горимоос гарах ч мөн)
   if (payload === 'START_ORDER') {
