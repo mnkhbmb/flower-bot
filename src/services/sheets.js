@@ -1,6 +1,7 @@
 // Google Sheets-тэй харьцах бүх функц энд
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
+import { findAliasGroup } from '../config/aliases.js';
 
 const auth = new JWT({
   email: process.env.GOOGLE_SERVICE_EMAIL,
@@ -324,19 +325,48 @@ function parseBaglaa(text) {
 }
 
 // Агуулахаас хасах (/haalt-аас дуудна)
+// Агуулахын мөрийг товчлолоор олох. Товчлолыг alias толиор өргөтгөж,
+// мөрийн "Товчлол" (таслалаар тусгаарласан) болон "Бараа нэр"-тэй тулгана.
+function matchAguulahRow(rows, tovch) {
+  const t = String(tovch || '').trim().toLowerCase();
+  if (!t) return null;
+
+  const variants = new Set([t]);
+  const group = findAliasGroup(t);
+  if (group) {
+    variants.add(group.canonical);
+    for (const a of group.aliases) variants.add(a);
+  }
+
+  return rows.find(r => {
+    const ner = String(r.get('Бараа нэр') || '').trim().toLowerCase();
+    if (variants.has(ner)) return true;
+    return String(r.get('Товчлол') || '')
+      .toLowerCase()
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+      .some(x => variants.has(x));
+  }) || null;
+}
+
 export async function decreaseAguurlah(baglaaText) {
   const d = await ensureLoaded();
   const sheet = d.sheetsByTitle['Агуулах'];
-  if (!sheet) return [];
+  if (!sheet) return { warnings: [], unmatched: [] };
 
   const rows = await sheet.getRows();
   const items = parseBaglaa(baglaaText);
   const warnings = [];
+  const unmatched = [];
   const updates = new Map();   // rowNumber → шинэ утга
 
   for (const { tovch, too } of items) {
-    const row = rows.find(r => r.get('Товчлол') === tovch);
-    if (!row) continue;
+    const row = matchAguulahRow(rows, tovch);
+    if (!row) {
+      unmatched.push(tovch);   // танихгүй товчлолыг мэдэгдэнэ
+      continue;
+    }
 
     const current = updates.get(row.rowNumber) ?? (Number(row.get('Тоо')) || 0);
     const newToo = Math.max(0, current - too);
@@ -349,7 +379,7 @@ export async function decreaseAguurlah(baglaaText) {
   }
 
   await batchSetToo(sheet, updates);   // нэг бичилтээр бүгдийг хадгална
-  return warnings;
+  return { warnings, unmatched };
 }
 
 // "Тоо" баганын олон мөрийг НЭГ API дуудлагаар шинэчлэх (мөр бүрд row.save()
@@ -417,7 +447,7 @@ export async function manualAddAguurlah(tovch, too) {
   const sheet = d.sheetsByTitle['Агуулах'];
   if (!sheet) return null;
   const rows = await sheet.getRows();
-  const row = rows.find(r => r.get('Товчлол') === tovch);
+  const row = matchAguulahRow(rows, tovch);   // alias толиор ч таньна
   if (!row) return null;
   const current = Number(row.get('Тоо')) || 0;
   const newToo = current + too;

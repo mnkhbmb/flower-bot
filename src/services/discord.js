@@ -106,7 +106,15 @@ export async function startDiscord() {
 
         // Агуулахаас хасах + анхааруулга шалгах
         if (baglaa) {
-          const warnings = await decreaseAguurlah(baglaa);
+          const { warnings, unmatched } = await decreaseAguurlah(baglaa);
+          // Агуулахаас олдоогүй товчлолыг хаалт оруулсан хүнд шууд мэдэгдэнэ
+          if (unmatched.length > 0) {
+            await interaction.followUp({
+              content: `⚠️ Эдгээр товчлол агуулахаас олдсонгүй, хасагдаагүй: **${unmatched.join(', ')}**\n` +
+                       'Агуулахын "Товчлол" баганад нэмэх эсвэл зөв бичсэн эсэхээ шалгана уу.',
+              ephemeral: true,
+            }).catch(() => {});
+          }
           if (warnings.length > 0) {
             const warnChannel = await client.channels.fetch(process.env.DISCORD_WARNING_CHANNEL_ID);
             const warnList = warnings.map(w =>
