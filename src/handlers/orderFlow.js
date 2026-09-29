@@ -231,7 +231,7 @@ async function showMenu(psid, session) {
   session.step = STEPS.START;
   await sendButtons(
     psid,
-    'Сайн байна уу! La Paradiso цэцгийн дэлгүүрт тавтай морил 🌸\nЮу хийх вэ?',
+    'Сайн байна уу! La Paradiso цэцгийн дэлгүүрт тавтай морил 🌸\nТанд юугаар туслах вэ?',
     [
       { title: '🌸 Захиалга өгөх', payload: 'START_ORDER' },
       { title: '💬 Асуулт асуух', payload: 'AI_CHAT' },
@@ -326,7 +326,7 @@ async function askFlower(psid, session) {
   session.flowerOptions = options.slice(0, 13);
   await sendButtons(
     psid,
-    'Сайн байна уу! Манай цэцгийн дэлгүүрт тавтай морил 🌸\nЯмар цэцэг сонгох вэ?',
+    'Ямар цэцэг сонирхож байна вэ? 🌸',
     session.flowerOptions.map((name, i) => ({
       title: name.slice(0, 20),
       payload: `FLOWER_${i}`,
