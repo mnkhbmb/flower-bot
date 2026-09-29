@@ -558,3 +558,31 @@ export async function getPeriodReport(from, to) {
   }
   return acc;
 }
+
+// Агуулахад ШИНЭ бараа бүртгэх (/aguulah_shine). Товчлолыг таслалаар олноор өгч болно.
+export async function addAguulahItem({ ner, tovch, too, threshold = 5, turul = 'Цэцэг' }) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Агуулах'];
+  if (!sheet) return { ok: false, reason: 'no_sheet' };
+
+  const rows = await sheet.getRows();
+
+  // Товчлолуудыг цэвэрлэж, аль нэг нь аль хэдийн ашиглагдсан эсэхийг шалгана
+  const tovchList = String(tovch).split(',').map(t => t.trim()).filter(Boolean);
+  for (const t of tovchList) {
+    if (matchAguulahRow(rows, t)) {
+      return { ok: false, reason: 'duplicate', tovch: t };
+    }
+  }
+
+  await sheet.addRow({
+    '№': rows.length + 1,
+    'Бараа нэр': ner,
+    'Товчлол': tovchList.join(','),
+    'Төрөл': turul,
+    'Анхны тоо': too,
+    'Тоо': too,
+    'Анхааруулгын хэмжээ': threshold,
+  });
+  return { ok: true, ner, tovch: tovchList.join(', '), too };
+}

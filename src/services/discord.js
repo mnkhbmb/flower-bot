@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem } from './sheets.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -41,6 +41,14 @@ const commands = [
   new SlashCommandBuilder()
     .setName('aguulah')
     .setDescription('Агуулахын одоогийн байдал харах')
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('aguulah_shine')
+    .setDescription('Агуулахад ШИНЭ бараа бүртгэх (хаалтад танигдаагүй товчлол гарвал)')
+    .addStringOption(o => o.setName('ner').setDescription('Бараа нэр (ж: Цахирмаа)').setRequired(true))
+    .addStringOption(o => o.setName('tovch').setDescription('Товчлол, таслалаар олноор (ж: цах,tsah)').setRequired(true))
+    .addIntegerOption(o => o.setName('too').setDescription('Одоогийн үлдэгдэл').setRequired(true))
+    .addIntegerOption(o => o.setName('anhaaruulga').setDescription('Анхааруулгын доод хэмжээ (default 5)').setRequired(false))
     .toJSON(),
   new SlashCommandBuilder()
     .setName('tsalin')
@@ -280,6 +288,43 @@ export async function startDiscord() {
       } catch (err) {
         console.error('aguulah error:', err.message);
         await interaction.editReply('⚠️ Алдаа гарлаа.');
+      }
+      return;
+    }
+
+    // /aguulah_shine — агуулахад шинэ бараа бүртгэх
+    if (interaction.commandName === 'aguulah_shine') {
+      await interaction.deferReply();
+      try {
+        const ner = interaction.options.getString('ner');
+        const tovch = interaction.options.getString('tovch');
+        const too = interaction.options.getInteger('too');
+        const threshold = interaction.options.getInteger('anhaaruulga') ?? 5;
+
+        const result = await addAguulahItem({ ner, tovch, too, threshold });
+        if (!result.ok) {
+          await interaction.editReply(
+            result.reason === 'duplicate'
+              ? `⚠️ **${result.tovch}** товчлол аль хэдийн ашиглагдсан байна. Өөр товчлол сонгоно уу.`
+              : '⚠️ "Агуулах" tab олдсонгүй.'
+          );
+          return;
+        }
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor(0x34A853)
+            .setTitle('🆕 Шинэ бараа бүртгэгдлээ')
+            .addFields(
+              { name: 'Бараа', value: result.ner, inline: true },
+              { name: 'Товчлол', value: result.tovch, inline: true },
+              { name: 'Үлдэгдэл', value: `${result.too}ш`, inline: true },
+            )
+            .setFooter({ text: 'Одооноос /haalt дээр энэ товчлолыг таних болно' })
+            .setTimestamp()]
+        });
+      } catch (err) {
+        console.error('aguulah_shine error:', err.message);
+        await interaction.editReply('⚠️ Бараа бүртгэхэд алдаа гарлаа.');
       }
       return;
     }
