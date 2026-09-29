@@ -5,7 +5,7 @@ import cron from 'node-cron';
 import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
 import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
-import { wasSentByBot } from './services/messenger.js';
+import { wasSentByBot, logPageSubscriptions } from './services/messenger.js';
 
 const app = express();
 app.use(express.json());
@@ -118,6 +118,7 @@ app.listen(PORT, async () => {
   console.log(`✅ Сервер ${PORT} порт дээр ажиллаж байна`);
   await startDiscord();
   startGmailPoller();   // Gmail-ийн банкны и-мэйл шалгах (env тохируулсан бол)
+  logPageSubscriptions();
 });
 
 // --- CRON: өдөр бүр 20:00-д хаалт/гарлаа бүртгүүлэх сануулга ---

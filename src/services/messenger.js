@@ -95,3 +95,25 @@ export async function sendTyping(psid) {
     sender_action: 'typing_on',
   });
 }
+
+// Хуудас ямар webhook талбаруудад бүртгэгдсэнийг шалгаж лог-д хэвлэнэ.
+// (App-ын түвшний бүртгэлээс ТУСДАА — echo ирэхгүй байвал ихэвчлэн энд дутуу байдаг.)
+export async function logPageSubscriptions() {
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/me/subscribed_apps?access_token=${TOKEN}`
+    );
+    const body = await res.json();
+    const fields = body?.data?.[0]?.subscribed_fields;
+    if (!fields) {
+      console.log('⚠️ Хуудасны webhook бүртгэл уншигдсангүй:', JSON.stringify(body).slice(0, 300));
+      return;
+    }
+    console.log('🔗 Хуудасны webhook талбарууд:', fields.join(', '));
+    if (!fields.includes('message_echoes')) {
+      console.log('❌ message_echoes ХУУДАСТ бүртгэгдээгүй — ажилтны мессежийг бот мэдэхгүй!');
+    }
+  } catch (err) {
+    console.error('Хуудасны бүртгэл шалгах алдаа:', err.message);
+  }
+}
