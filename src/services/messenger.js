@@ -2,15 +2,41 @@
 const FB_API = 'https://graph.facebook.com/v21.0/me/messages';
 const TOKEN = process.env.FB_PAGE_ACCESS_TOKEN;
 
+// Ботын өөрөө илгээсэн мессежийн ID-г түр санана. Echo ирэхэд энд байвал
+// "бот өөрөө", байхгүй бол "ажилтан гараар бичсэн" гэж найдвартай ялгана.
+// (app_id-аар ялгах нь Business Suite дээр ажиллахгүй байсан.)
+const botSentMids = new Set();
+const MAX_MIDS = 1000;
+
+export function wasSentByBot(mid) {
+  return !!mid && botSentMids.has(mid);
+}
+
 async function callSendAPI(payload) {
   const res = await fetch(`${FB_API}?access_token=${TOKEN}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+
+  const body = await res.text();
   if (!res.ok) {
-    console.error('FB send error:', await res.text());
+    console.error('FB send error:', body);
+    return res;
   }
+
+  try {
+    const mid = JSON.parse(body)?.message_id;
+    if (mid) {
+      botSentMids.add(mid);
+      // Хэт олон хуримтлагдахаас сэргийлж хамгийн эртнийг нь хасна
+      if (botSentMids.size > MAX_MIDS) {
+        const it = botSentMids.values();
+        for (let i = 0; i < 200; i++) botSentMids.delete(it.next().value);
+      }
+    }
+  } catch { /* JSON биш хариу — алгасна */ }
+
   return res;
 }
 

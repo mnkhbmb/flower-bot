@@ -5,6 +5,7 @@ import cron from 'node-cron';
 import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
 import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
+import { wasSentByBot } from './services/messenger.js';
 
 const app = express();
 app.use(express.json());
@@ -83,11 +84,13 @@ app.post('/webhook', async (req, res) => {
 
   for (const entry of req.body.entry) {
     for (const event of entry.messaging || []) {
-      // Echo = хуудаснаас илгээгдсэн мессеж. app_id байхгүй бол ажилтан
-      // Page Inbox-оос гараар бичсэн гэсэн үг — ботыг түр зогсооно.
+      // Echo = хуудаснаас илгээгдсэн мессеж. Ботын өөрийн илгээсэн ID-д
+      // байхгүй бол ажилтан гараар бичсэн гэсэн үг — ботыг түр зогсооно.
       // (Echo дээр recipient.id нь хэрэглэгчийн PSID, sender.id нь хуудас.)
       if (event.message?.is_echo) {
-        if (!event.message.app_id) pauseForHuman(event.recipient.id);
+        if (!wasSentByBot(event.message.mid)) {
+          pauseForHuman(event.recipient.id);
+        }
         continue;
       }
 
