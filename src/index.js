@@ -5,7 +5,7 @@ import cron from 'node-cron';
 import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
 import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
-import { wasSentByBot, logPageSubscriptions } from './services/messenger.js';
+import { wasSentByBot } from './services/messenger.js';
 
 const app = express();
 app.use(express.json());
@@ -87,21 +87,17 @@ app.post('/webhook', async (req, res) => {
       // Echo = хуудаснаас илгээгдсэн мессеж. Ботын өөрийн илгээсэн ID-д
       // байхгүй бол ажилтан гараар бичсэн гэсэн үг — ботыг түр зогсооно.
       // (Echo дээр recipient.id нь хэрэглэгчийн PSID, sender.id нь хуудас.)
+      // app_id-аар ялгаж болохгүй: Business Suite-ээс бичихэд ч өөрийн
+      // app_id тавигддаг тул мессежийн ID-гаар ялгана.
       if (event.message?.is_echo) {
-        const fromBot = wasSentByBot(event.message.mid);
-        console.log('📨 Echo:', JSON.stringify({
-          fromBot,
-          app_id: event.message.app_id ?? null,
-          to: event.recipient?.id,
-          text: event.message.text?.slice(0, 40),
-        }));
-        if (!fromBot) pauseForHuman(event.recipient.id);
+        if (!wasSentByBot(event.message.mid)) {
+          pauseForHuman(event.recipient.id);
+        }
         continue;
       }
 
       const psid = event.sender.id;
       if (event.message) {
-        console.log(`📥 Хэрэглэгчээс: ${psid} — ${event.message.text?.slice(0, 40) ?? '[хавсралт]'}`);
         try {
           await handleMessage(psid, event.message);
         } catch (err) {
@@ -118,7 +114,6 @@ app.listen(PORT, async () => {
   console.log(`✅ Сервер ${PORT} порт дээр ажиллаж байна`);
   await startDiscord();
   startGmailPoller();   // Gmail-ийн банкны и-мэйл шалгах (env тохируулсан бол)
-  logPageSubscriptions();
 });
 
 // --- CRON: өдөр бүр 20:00-д хаалт/гарлаа бүртгүүлэх сануулга ---
