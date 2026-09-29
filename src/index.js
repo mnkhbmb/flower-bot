@@ -88,14 +88,20 @@ app.post('/webhook', async (req, res) => {
       // байхгүй бол ажилтан гараар бичсэн гэсэн үг — ботыг түр зогсооно.
       // (Echo дээр recipient.id нь хэрэглэгчийн PSID, sender.id нь хуудас.)
       if (event.message?.is_echo) {
-        if (!wasSentByBot(event.message.mid)) {
-          pauseForHuman(event.recipient.id);
-        }
+        const fromBot = wasSentByBot(event.message.mid);
+        console.log('📨 Echo:', JSON.stringify({
+          fromBot,
+          app_id: event.message.app_id ?? null,
+          to: event.recipient?.id,
+          text: event.message.text?.slice(0, 40),
+        }));
+        if (!fromBot) pauseForHuman(event.recipient.id);
         continue;
       }
 
       const psid = event.sender.id;
       if (event.message) {
+        console.log(`📥 Хэрэглэгчээс: ${psid} — ${event.message.text?.slice(0, 40) ?? '[хавсралт]'}`);
         try {
           await handleMessage(psid, event.message);
         } catch (err) {
