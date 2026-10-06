@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Цэцгийн асуулт — La Paradiso</title>
+<meta name="description" content="Цэцгийн тухай 7 асуултад хариулаад баглаагаа ургуул. Зөв хариулт бүрд нэг цэцэг дэлгэрнэ.">
+<meta name="theme-color" content="#FF5757">
+<meta property="og:title" content="Цэцгийн асуулт — La Paradiso">
+<meta property="og:description" content="7 асуултад хариулаад баглаагаа ургуул. Чи хэдэн цэцэг дэлгэрүүлэх вэ?">
+<meta property="og:image" content="https://flower-bot-production-e2f5.up.railway.app/logo.jpg">
+<link rel="icon" href="/logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=League+Spartan:wght@800&family=Montserrat:wght@700;800&family=Rokkitt:wght@500&display=swap">
+<style>
+  /* Layout: дээр ургаж буй баглаа, доор асуулт — нэг дэлгэцэнд */
+  :root {
+    --bg: #FDF0F2; --panel: #FFFFFF; --ink: #2B1A1D; --muted: #7A5F65; --line: #2B1A1D;
+    --accent: #E23B41; --accent-ink: #FFFFFF; --soft: #FFE1E4; --brand: #FF5757;
+    --good: #1F8A4C; --good-bg: #DDF3E4; --bad: #B3261E; --bad-bg: #FBE0DE;
+    --table: #FBD5DF; --table-dot: #FFFFFF; --table-ink: #2B1A1D;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171114; --panel: #221A1E; --ink: #F5EAED; --muted: #AB959C; --line: #534147;
+      --accent: #FF6B6B; --accent-ink: #2A1016; --soft: #3B2229; --brand: #FF6B6B;
+      --good: #6FD99A; --good-bg: #17382A; --bad: #FF8A80; --bad-bg: #40201E;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink);
+         font-family: "Golos Text", system-ui, sans-serif; font-size: 15px; line-height: 1.5;
+         -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+         padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
+         border-bottom: 2px solid var(--line); background: var(--panel); }
+  .brand { display: flex; align-items: center; gap: 5px; white-space: nowrap; text-decoration: none;
+           font-family: "League Spartan", "Montserrat", system-ui, sans-serif; font-weight: 800;
+           font-size: 19px; line-height: 1; letter-spacing: -.01em; color: var(--brand); }
+  .brand svg { width: 20px; height: 15px; flex: none; }
+  .toplink { font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+
+  .stagewrap { position: relative; flex: 0 0 34%; min-height: 190px; border-bottom: 2px solid var(--line);
+               background: radial-gradient(var(--table-dot) 20%, transparent 22%) 0 0 / 26px 26px var(--table); }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  @media (prefers-reduced-motion: no-preference) {
+    #stage g.new { animation: grow .45s cubic-bezier(.2, 1.4, .4, 1); transform-box: fill-box; transform-origin: center; }
+    @keyframes grow { from { opacity: 0; scale: .2 } to { opacity: 1; scale: 1 } }
+  }
+  .dots { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 6px; }
+  .dots i { width: 12px; height: 12px; border: 2px solid var(--table-ink); background: var(--panel); }
+  .dots i.ok { background: #1F8A4C; } .dots i.no { background: #B3261E; } .dots i.cur { background: #FFD45C; }
+
+  .play { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+          padding: 14px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .cat { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+         color: var(--accent); margin-bottom: 4px; }
+  h1 { font-family: "Montserrat", system-ui, sans-serif; font-weight: 700; font-size: 19px; line-height: 1.3;
+       margin: 0 0 12px; text-wrap: balance; }
+  .opts { display: grid; gap: 8px; }
+  .opt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 12px;
+         background: var(--panel); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--line);
+         cursor: pointer; font-weight: 500; min-height: 50px; }
+  .opt b { flex: none; width: 26px; height: 26px; display: grid; place-items: center; font-size: 13px;
+           border: 2px solid var(--line); background: var(--soft); }
+  .opt:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+  .opt:disabled { cursor: default; box-shadow: none; opacity: .55; }
+  .opt.ok { opacity: 1; background: var(--good-bg); border-color: var(--good); }
+  .opt.ok b { background: var(--good); color: #fff; border-color: var(--good); }
+  .opt.no { opacity: 1; background: var(--bad-bg); border-color: var(--bad); }
+  .opt.no b { background: var(--bad); color: #fff; border-color: var(--bad); }
+  .after { margin-top: 12px; }
+  .verdict { font-weight: 700; margin: 0 0 2px; }
+  .verdict.ok { color: var(--good); } .verdict.no { color: var(--bad); }
+  .fact { margin: 0 0 12px; color: var(--muted); }
+
+  .btn { padding: 12px 18px; font-weight: 700; cursor: pointer; border: 2px solid var(--line);
+         background: var(--panel); color: var(--ink); box-shadow: 3px 3px 0 var(--line);
+         text-decoration: none; display: block; text-align: center; width: 100%; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .stack { display: grid; gap: 10px; margin-top: 14px; }
+
+  .result { text-align: center; }
+  .score { font-family: "Montserrat", system-ui, sans-serif; font-weight: 800; font-size: 44px; line-height: 1;
+           color: var(--accent); margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+  .rank { font-family: "Montserrat", system-ui, sans-serif; font-weight: 700; font-size: 20px; margin: 0 0 6px; }
+  .result p { margin: 0 auto; max-width: 34ch; color: var(--muted); }
+  .fine { font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .load { text-align: center; color: var(--muted); padding: 30px 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" href="/baglaa" aria-label="La Paradiso">LA<svg viewBox="0 0 8 6" aria-hidden="true" shape-rendering="crispEdges"><rect x="0" y="1" width="2" height="3" fill="#2B1A1D"/><rect x="2" y="0" width="4" height="1" fill="#E23B41"/><rect x="2" y="1" width="5" height="3" fill="#E23B41"/><rect x="7" y="2" width="1" height="2" fill="#E23B41"/><rect x="3" y="4" width="4" height="1" fill="#E23B41"/><rect x="3" y="2" width="1" height="1" fill="#2B1A1D"/><rect x="5" y="1" width="1" height="1" fill="#2B1A1D"/><rect x="6" y="3" width="1" height="1" fill="#2B1A1D"/><rect x="2" y="5" width="1" height="1" fill="#2B1A1D"/><rect x="5" y="5" width="1" height="1" fill="#2B1A1D"/></svg>PARADISO.</a>
+    <a class="toplink" href="/baglaa">Баглаа угсрах →</a>
+  </header>
+
+  <section class="stagewrap" aria-label="Ургаж буй баглаа">
+    <svg id="stage" viewBox="0 66 400 404" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Таны хариултаар ургаж буй баглаа"></svg>
+    <div class="dots" id="dots" aria-hidden="true"></div>
+  </section>
+
+  <main class="play" id="play" aria-live="polite">
+    <p class="load" id="load">Асуултуудыг ачаалж байна…</p>
+
+    <div id="quiz" hidden>
+      <span class="cat" id="cat"></span>
+      <h1 id="q"></h1>
+      <div class="opts" id="opts"></div>
+      <div class="after" id="after" hidden>
+        <p class="verdict" id="verdict"></p>
+        <p class="fact" id="fact"></p>
+        <button class="btn primary" id="next" type="button">Дараах →</button>
+      </div>
+    </div>
+
+    <div class="result" id="result" hidden>
+      <div class="score" id="score"></div>
+      <div class="rank" id="rank"></div>
+      <p id="blurb"></p>
+      <div class="stack">
+        <button class="btn primary" id="order" type="button">Энэ баглааг засаж захиалах</button>
+        <button class="btn" id="share" type="button">Үр дүнгээ хуваалцах</button>
+        <a class="btn" id="save" download="la-paradiso-asuult.png" hidden>Зураг хадгалах</a>
+        <button class="btn" id="again" type="button">Дахин тоглох</button>
+      </div>
+      <p class="fine">Асуулт бүр тоглох тоолонд солигдоно.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Пиксел цэцгүүд — public/baglaa.html-тэй ижил (id, хэлбэр, өнгө таарах ёстой) */
+  var SHAPES = {
+    round: ['..PPP..', '.PPPPP.', 'PPPCPPP', 'PPCCCPP', 'PPPCPPP', '.PPPPP.', '..PPP..'],
+    ray:   ['...P...', '.P.P.P.', '..PCP..', 'PPCCCPP', '..PCP..', '.P.P.P.', '...P...'],
+    bell:  ['.P...P.', '.PP.PP.', '..PPP..', '.PPCPP.', '.PPPPP.', '..PPP..', '...P...'],
+    spray: ['.P.P.P.', 'P.PCP.P', '.PPPPP.', 'P.PCP.P', '.P.P.P.', '..PPP..', '...P...'],
+    grass: ['.P...P.', '.P.P.P.', 'P..P..P', 'P.PP.P.', '.PPPPP.', '..PPP..', '...P...'],
+    leaf:  ['...P...', '..PPP..', '.PPCPP.', '.PPCPP.', '.PPCPP.', '..PCP..', '...C...']
+  };
+  var FLOWERS = [
+    { id: 'sarnai',   shape: 'round', P: '#E0455F', C: '#A32442' },
+    { id: 'romashka', shape: 'ray',   P: '#FBF7F0', C: '#F2B705' },
+    { id: 'udval',    shape: 'bell',  P: '#9A6BD8', C: '#5F349A' },
+    { id: 'gerbera',  shape: 'ray',   P: '#FF7A3C', C: '#8E3C18' },
+    { id: 'tseene',   shape: 'round', P: '#F392B8', C: '#CE5B8B' },
+    { id: 'narants',  shape: 'ray',   P: '#F5C32C', C: '#7A4A12' },
+    { id: 'statis',   shape: 'spray', P: '#6E8CE0', C: '#3B56A3' },
+    { id: 'lili',     shape: 'bell',  P: '#FBE7F0', C: '#E58FB4' },
+    { id: 'matiol',   shape: 'spray', P: '#C77DFF', C: '#8646CF' }
+  ];
+  var GREENS = [
+    { id: 'navch', shape: 'leaf',  P: '#6DA95D', C: '#3F7036' },
+    { id: 'uvs',   shape: 'grass', P: '#5E9A4E', C: '#5E9A4E' }
+  ];
+  var ROUNDS = 7, CELL = 7, HALF = 24.5, GREEN = '#4A7C3F', INK = '#2B1A1D';
+  var LETTERS = ['А', 'Б', 'В', 'Г'];
+  var SEEN_KEY = 'lp_trivia_seen', DRAFT_KEY = 'lp_baglaa_v1';
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  var bank = [], round = [], idx = 0, results = [], stems = [], fresh = -1, palette = [], lastPng = null;
+
+  /* ---------- Асуулт сонгох: үзээгүйг түрүүлж, нэг сэдвээс хоёроос илүүгүй ---------- */
+  function loadSeen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch (e) { return []; } }
+  function saveSeen(list) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(list)); } catch (e) { /* алгасна */ } }
+  function pickRound() {
+    var seen = loadSeen();
+    if (seen.length > bank.length - ROUNDS) seen = [];
+    var order = shuffle(bank.map(function (_, i) { return i; }));
+    order.sort(function (a, b) { return (seen.indexOf(a) >= 0) - (seen.indexOf(b) >= 0); });
+    var perCat = {}, out = [];
+    order.forEach(function (i) {
+      if (out.length >= ROUNDS) return;
+      var c = bank[i].c;
+      if ((perCat[c] || 0) >= 2) return;
+      perCat[c] = (perCat[c] || 0) + 1;
+      out.push(i);
+    });
+    saveSeen(seen.concat(out));
+    return shuffle(out).map(function (i) {
+      // Сонголтын дарааллыг холино, зөв хариултыг дагуулна
+      var q = bank[i], ord = shuffle([0, 1, 2, 3]);
+      return { c: q.c, q: q.q, f: q.f, o: ord.map(function (k) { return q.o[k]; }), a: ord.indexOf(q.a) };
+    });
+  }
+
+  /* ---------- Баглаа ---------- */
+  function slot(i) {
+    var r = 86 * Math.sqrt((i + 0.5) / ROUNDS), a = i * 2.39996 + 0.6;
+    return { x: clamp(200 + r * Math.cos(a) * 1.2, 80, 320), y: clamp(168 + r * Math.sin(a) * 0.7, 96, 232) };
+  }
+  function sprite(f) {
+    var rows = SHAPES[f.shape], out = '';
+    for (var y = 0; y < rows.length; y++) for (var x = 0; x < rows[y].length; x++) {
+      var ch = rows[y].charAt(x);
+      if (ch === '.') continue;
+      out += '<rect x="' + (x * CELL) + '" y="' + (y * CELL) + '" width="' + CELL + '" height="' + CELL + '" fill="' + (ch === 'P' ? f.P : f.C) + '"/>';
+    }
+    return out;
+  }
+  function scene(animate) {
+    var poly = function (pts, fill, w) {
+      return '<polygon points="' + pts + '" fill="' + fill + '" stroke="' + INK + '" stroke-width="' + (w || 2.5) + '" stroke-linejoin="round"/>';
+    };
+    var out = poly('200,414 58,232 92,112 200,146 308,112 342,232', '#C4AB84', 3);
+    stems.forEach(function (s) {
+      out += '<line x1="' + s.x.toFixed(1) + '" y1="' + s.y.toFixed(1) + '" x2="' + (200 + (s.x - 200) * 0.12).toFixed(1) +
+             '" y2="318" stroke="' + GREEN + '" stroke-width="5" shape-rendering="crispEdges"/>';
+    });
+    stems.map(function (_, i) { return i; }).sort(function (a, b) { return stems[a].y - stems[b].y; }).forEach(function (i) {
+      var s = stems[i], lean = clamp((s.x - 200) * 0.14, -20, 20);
+      out += '<g transform="translate(' + s.x.toFixed(1) + ',' + s.y.toFixed(1) + ') rotate(' + lean.toFixed(1) + ')">' +
+             '<g' + (animate && i === fresh ? ' class="new"' : '') + '><g transform="translate(' + (-HALF) + ',' + (-HALF) + ')">' +
+             sprite(s.f) + '</g></g></g>';
+    });
+    out += poly('200,426 92,258 200,286 308,258', '#D9C3A0', 3) +
+           '<line x1="200" y1="288" x2="200" y2="422" stroke="' + INK + '" stroke-width="2" opacity=".18"/>' +
+           poly('136,326 264,326 253,344 147,344', '#D2283F') +
+           poly('196,342 185,374 197,367', '#D2283F') + poly('204,342 215,374 203,367', '#D2283F') +
+           poly('200,335 171,318 171,352', '#D2283F') + poly('200,335 229,318 229,352', '#D2283F') +
+           '<rect x="193" y="328" width="14" height="14" fill="#D2283F" stroke="' + INK + '" stroke-width="2.5"/>';
+    return out;
+  }
+  function drawStage(animate) { $('stage').innerHTML = scene(animate); fresh = -1; }
+  function drawDots() {
+    var h = '';
+    for (var i = 0; i < ROUNDS; i++) {
+      var cls = i < results.length ? (results[i] ? 'ok' : 'no') : (i === idx && $('result').hidden ? 'cur' : '');
+      h += '<i class="' + cls + '"></i>';
+    }
+    $('dots').innerHTML = h;
+  }
+
+  /* ---------- Асуулт ---------- */
+  function showQuestion() {
+    var q = round[idx];
+    $('cat').textContent = q.c + ' · ' + (idx + 1) + ' / ' + ROUNDS;
+    $('q').textContent = q.q;
+    $('opts').innerHTML = q.o.map(function (o, i) {
+      return '<button class="opt" type="button" data-i="' + i + '"><b>' + LETTERS[i] + '</b><span>' + esc(o) + '</span></button>';
+    }).join('');
+    $('after').hidden = true;
+    $('play').scrollTop = 0;
+    drawDots();
+  }
+  $('opts').addEventListener('click', function (e) {
+    var btn = e.target.closest('.opt');
+    if (!btn || btn.disabled) return;
+    var q = round[idx], pick = Number(btn.getAttribute('data-i')), right = pick === q.a;
+    [].forEach.call($('opts').querySelectorAll('.opt'), function (b, i) {
+      b.disabled = true;
+      if (i === q.a) b.classList.add('ok');
+      else if (i === pick) b.classList.add('no');
+    });
+    results.push(right);
+
+    // Зөв бол цэцэг, буруу бол навч ургана
+    var pos = slot(stems.length);
+    var f = right ? palette[results.filter(Boolean).length - 1] : GREENS[(results.length - results.filter(Boolean).length - 1) % GREENS.length];
+    stems.push({ id: f.id, f: f, x: pos.x, y: pos.y });
+    fresh = stems.length - 1;
+    drawStage(true);
+
+    $('verdict').textContent = right ? 'Зөв! Нэг цэцэг дэлгэрлээ.' : 'Буруу. Энэ удаад навч ургалаа.';
+    $('verdict').className = 'verdict ' + (right ? 'ok' : 'no');
+    $('fact').textContent = q.f;
+    $('next').textContent = idx === ROUNDS - 1 ? 'Үр дүнгээ харах →' : 'Дараах →';
+    $('after').hidden = false;
+    drawDots();
+    $('next').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+  $('next').addEventListener('click', function () {
+    idx++;
+    if (idx < ROUNDS) showQuestion(); else finish();
+  });
+
+  /* ---------- Үр дүн ---------- */
+  function rankOf(n) {
+    if (n === ROUNDS) return ['Цэцгийн мэргэн', 'Бүгдийг зөв хариуллаа. Манай цэцэгчид ч танаас суралцмаар байна.'];
+    if (n >= 5) return ['Цэцэгчин', 'Маш сайн! Баглаа чинь цэцгээр дүүрэн боллоо.'];
+    if (n >= 3) return ['Цэцэг сонирхогч', 'Гайгүй шүү. Дахин тоглоод баглаагаа улам дэлгэрүүлээрэй.'];
+    return ['Нахиа', 'Эхлэл болгон тавьж байна. Навчит баглаа ч гэсэн өөрийн гэсэн өнгөтэй.'];
+  }
+  function makePng(score) {
+    return new Promise(function (resolve) {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="880" viewBox="0 0 400 440">' +
+                '<defs><pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">' +
+                '<rect width="22" height="22" fill="#FBD5DF"/><circle cx="11" cy="11" r="3.4" fill="#FFFFFF"/></pattern></defs>' +
+                '<rect width="400" height="440" fill="url(#dots)"/>' + scene(false) +
+                '<rect x="8" y="8" width="150" height="46" fill="#FFFFFF" stroke="#2B1A1D" stroke-width="2.5"/>' +
+                '<text x="18" y="27" font-family="sans-serif" font-size="11" font-weight="700" fill="#E23B41" letter-spacing="1.5">LA PARADISO.</text>' +
+                '<text x="18" y="46" font-family="sans-serif" font-size="14" font-weight="700" fill="#2B1A1D">' + score + ' / ' + ROUNDS + ' зөв</text></svg>';
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var c = document.createElement('canvas'); c.width = 800; c.height = 880;
+          var ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0, 800, 880);
+          resolve(c.toDataURL('image/png'));
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = function () { resolve(null); };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+  function finish() {
+    var n = results.filter(Boolean).length, r = rankOf(n);
+    $('quiz').hidden = true; $('result').hidden = false;
+    $('score').textContent = n + ' / ' + ROUNDS;
+    $('rank').textContent = r[0];
+    $('blurb').textContent = r[1];
+    $('order').textContent = n > 0 ? 'Энэ баглааг засаж захиалах' : 'Өөрөө баглаа угсрах';
+    $('play').scrollTop = 0;
+    drawDots();
+    lastPng = null; $('save').hidden = true;
+    makePng(n).then(function (png) {
+      lastPng = png;
+      if (png) { $('save').href = png; $('save').hidden = false; }
+    });
+  }
+  // Ургасан баглааг угсрагч руу дамжуулна (угсрагчийн ноорог болгож хадгална)
+  $('order').addEventListener('click', function () {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        stems: stems.map(function (s) { return { id: s.id, x: s.x, y: clamp(s.y - 8, 44, 236) }; }),
+        paperId: 'kraft', ribbonId: 'red', message: ''
+      }));
+    } catch (e) { /* хадгалж чадахгүй бол хоосон угсрагч нээгдэнэ */ }
+    location.href = '/baglaa';
+  });
+  $('share').addEventListener('click', function () {
+    var n = results.filter(Boolean).length;
+    var text = 'La Paradiso-гийн цэцгийн асуултад ' + ROUNDS + '-оос ' + n + '-г зөв хариулж баглаа ургууллаа. Чи хэдийг мэдэх вэ?';
+    var url = location.origin + '/trivia';
+    var fallback = function () {
+      var done = function () { $('share').textContent = 'Холбоос хуулагдлаа'; setTimeout(function () { $('share').textContent = 'Үр дүнгээ хуваалцах'; }, 2000); };
+      if (navigator.clipboard) navigator.clipboard.writeText(text + ' ' + url).then(done, function () {});
+    };
+    if (!navigator.share) return fallback();
+    var go = function (data) { return navigator.share(data).catch(function () { /* хэрэглэгч болиулсан */ }); };
+    if (lastPng && navigator.canShare) {
+      fetch(lastPng).then(function (r) { return r.blob(); }).then(function (blob) {
+        var data = { files: [new File([blob], 'la-paradiso-asuult.png', { type: 'image/png' })], text: text + ' ' + url };
+        return navigator.canShare(data) ? go(data) : go({ text: text, url: url });
+      }).catch(function () { go({ text: text, url: url }); });
+    } else go({ text: text, url: url });
+  });
+  $('again').addEventListener('click', start);
+
+  /* ---------- Эхлэл ---------- */
+  function start() {
+    round = pickRound(); idx = 0; results = []; stems = []; lastPng = null;
+    palette = shuffle(FLOWERS.slice());
+    $('result').hidden = true; $('quiz').hidden = false;
+    drawStage(false);
+    showQuestion();
+  }
+  drawStage(false);
+  fetch('/trivia.json').then(function (r) { if (!r.ok) throw new Error(); return r.json(); }).then(function (data) {
+    bank = data.filter(function (q) { return q && q.q && q.o && q.o.length === 4; });
+    if (bank.length < ROUNDS) throw new Error();
+    $('load').hidden = true;
+    start();
+  }).catch(function () {
+    $('load').textContent = 'Асуултуудыг ачаалж чадсангүй. Хуудсаа дахин ачаална уу.';
+  });
+})();
+</script>
+</body>
+</html>
