@@ -627,3 +627,26 @@ export async function addAguulahItem({ ner, tovch, too, threshold = 5, turul = '
   });
   return { ok: true, ner, tovch: tovchList.join(', '), too };
 }
+
+// Хорогдол бүртгэх — "Хаалт задаргаа" tab-д Төрөл = Хорогдол мөр болгож бичнэ.
+// Бичвэр: "Са-3 Ро-2" хэлбэртэй. Бүртгэсэн зүйлсийг буцаана (хоосон бол формат буруу).
+export async function saveHorogdol({ name, text }) {
+  const d = await ensureLoaded();
+  const detail = findSheet(d, 'Хаалт задаргаа');
+  if (!detail) throw new Error('Хаалт задаргаа tab олдсонгүй');
+
+  const items = [...String(text).matchAll(/([А-ЯӨҮа-яөүA-Za-z\/]+)-(\d+)/g)]
+    .map(m => ({ tovch: m[1], too: Number(m[2]) }))
+    .filter(i => i.too > 0);
+  if (!items.length) return [];
+
+  const today = new Date().toISOString().slice(0, 10);
+  await detail.addRows(items.map(i => ({
+    'Огноо':   today,
+    'Ажилтан': name,
+    'Товчлол': i.tovch,
+    'Тоо':     i.too,
+    'Төрөл':   'Хорогдол',
+  })));
+  return items;
+}

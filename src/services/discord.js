@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
-import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold } from './sheets.js';
+import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol } from './sheets.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -55,6 +55,10 @@ const commands = [
     .setDescription('Энэ хугацааны цалингийн тооцоо харах')
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('horogdol')
+    .setDescription('Хорогдол (гэмтсэн, хаясан цэцэг) бүртгэх')
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('zarsan')
     .setDescription('Хамгийн их зарагдсан цэцэг (хаалтын мэдээллээс)')
     .addIntegerOption(o => o.setName('honog').setDescription('Сүүлийн хэдэн хоног (default 30)')
@@ -91,6 +95,62 @@ export async function startDiscord() {
 
   // Командууд болон modal submit хариулах
   client.on('interactionCreate', async (interaction) => {
+
+    // "Хорогдол нэмэх" товч (хаалтын хариун дээрх) → цонх нээнэ
+    if (interaction.isButton() && interaction.customId === 'horogdol_open') {
+      await interaction.showModal(horogdolModal());
+      return;
+    }
+
+    // Хорогдлын цонх илгээгдэхэд
+    if (interaction.isModalSubmit() && interaction.customId === 'horogdol_modal') {
+      try {
+        await interaction.deferReply();
+        const name = interaction.user.displayName || interaction.user.username;
+        const text = interaction.fields.getTextInputValue('horogdol');
+        const reason = interaction.fields.getTextInputValue('shaltgaan') || '';
+
+        const items = await saveHorogdol({ name, text });
+        if (!items.length) {
+          await interaction.editReply('⚠️ Формат таарсангүй. Жишээ шиг бичнэ үү: `Са-3 Ро-2`');
+          return;
+        }
+
+        // Хорогдсон цэцгийг агуулахаас хасна
+        const { warnings, unmatched } = await decreaseAguurlah(text);
+        if (warnings.length > 0) {
+          const warnChannel = await client.channels.fetch(process.env.DISCORD_WARNING_CHANNEL_ID);
+          await warnChannel.send({
+            embeds: [new EmbedBuilder()
+              .setColor(0xFF0000)
+              .setTitle('🚨 Агуулах анхааруулга!')
+              .setDescription(warnings.map(w =>
+                `⚠️ **${w.ner}** (${w.tovch}) — үлдэгдэл: **${w.too}ш** (доод хэмжээ: ${w.threshold}ш)`).join('\n'))
+              .setTimestamp()]
+          });
+        }
+
+        const total = items.reduce((s, i) => s + i.too, 0);
+        const channel = await client.channels.fetch(process.env.DISCORD_HAALT_CHANNEL_ID);
+        const embed = new EmbedBuilder()
+          .setColor(0x8E6B7A)
+          .setTitle(`🥀 Хорогдол — ${name}`)
+          .setDescription(items.map(i => `${i.tovch} — **${i.too}ш**`).join('\n'))
+          .setFooter({ text: `Нийт ${total}ш` })
+          .setTimestamp();
+        if (reason) embed.addFields({ name: 'Шалтгаан', value: reason.slice(0, 1000), inline: false });
+        await channel.send({ embeds: [embed] });
+
+        await interaction.editReply(
+          `✅ Хорогдол бүртгэгдлээ (${total}ш).` +
+          (unmatched.length ? `\n⚠️ Агуулахаас олдоогүй тул хасагдаагүй: **${unmatched.join(', ')}**` : '')
+        );
+      } catch (err) {
+        console.error('Horogdol modal error:', err);
+        await interaction.editReply('⚠️ Хорогдол бүртгэхэд алдаа гарлаа.').catch(() => {});
+      }
+      return;
+    }
 
     // /haalt modal submit
     if (interaction.isModalSubmit() && interaction.customId === 'haalt_modal') {
@@ -166,7 +226,16 @@ export async function startDiscord() {
           ]
         });
 
-        await interaction.editReply({ content: '✅ Өдрийн хаалт бүртгэгдлээ!' });
+        await interaction.editReply({
+          content: '✅ Өдрийн хаалт бүртгэгдлээ! Хорогдол гарсан бол доорх товчоор нэмнэ үү.',
+          components: [new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('horogdol_open')
+              .setLabel('Хорогдол нэмэх')
+              .setEmoji('🥀')
+              .setStyle(ButtonStyle.Secondary)
+          )],
+        });
       } catch (err) {
         console.error('Haalt modal error:', err);
         await interaction.editReply({ content: '⚠️ Хаалт бүртгэхэд алдаа гарлаа.' }).catch(() => {});
@@ -335,6 +404,12 @@ export async function startDiscord() {
       return;
     }
 
+    // /horogdol — хорогдлын цонх нээх
+    if (interaction.commandName === 'horogdol') {
+      await interaction.showModal(horogdolModal());
+      return;
+    }
+
     // /zarsan — хамгийн их зарагдсан цэцэг
     if (interaction.commandName === 'zarsan') {
       await interaction.deferReply();
@@ -344,31 +419,7 @@ export async function startDiscord() {
         const from = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
         const r = await getTopSold(from, to);
 
-        const rank = (items, max) => items.slice(0, max)
-          .map((it, i) => `\`${String(i + 1).padStart(2)}.\` ${it.name} — **${it.qty.toLocaleString()}ш**`)
-          .join('\n');
-        const total = r.flowers.reduce((s, i) => s + i.qty, 0);
-
-        const embed = new EmbedBuilder()
-          .setColor(0xC9445A)
-          .setTitle(`🏆 Хамгийн их зарагдсан цэцэг — сүүлийн ${days} хоног`)
-          .setDescription(r.flowers.length ? rank(r.flowers, 15) : 'Энэ хугацаанд хаалтын задаргаа алга.')
-          .setFooter({ text: `${from} ~ ${to} · ${r.days} өдрийн хаалт · нийт ${total.toLocaleString()} иш цэцэг` })
-          .setTimestamp();
-
-        if (r.others.length) {
-          embed.addFields({ name: '🎀 Боодол, дагалдах бараа', value: rank(r.others, 8), inline: false });
-        }
-        if (r.unknown.length) {
-          embed.addFields({
-            name: '❓ Танигдаагүй товчлол',
-            value: r.unknown.slice(0, 10).map(i => `${i.name} (${i.qty})`).join(', ').slice(0, 1000),
-            inline: false,
-          });
-        }
-        if (r.waste > 0) {
-          embed.addFields({ name: '🥀 Хорогдол', value: `${r.waste.toLocaleString()}ш`, inline: true });
-        }
+        const embed = topSoldEmbed(r, `🏆 Хамгийн их зарагдсан цэцэг — сүүлийн ${days} хоног`, 15);
         await interaction.editReply({ embeds: [embed] });
       } catch (err) {
         console.error('zarsan error:', err.message);
@@ -690,7 +741,73 @@ async function buildSalaryEmbed(from, to, { save = false } = {}) {
     console.error('Хугацааны орлого унших алдаа:', err.message);
   }
 
-  return [embed, attendanceEmbed(report), ...financeEmbeds];
+  // Тухайн хугацаанд хамгийн их зарагдсан цэцэг (Хаалт задаргаа tab-аас)
+  let topEmbeds = [];
+  try {
+    const top = await getTopSold(from, to);
+    if (top.flowers.length) {
+      topEmbeds = [topSoldEmbed(top, `🏆 Хамгийн их зарагдсан цэцэг — ${from} ~ ${to}`, 10)];
+    }
+  } catch (err) {
+    console.error('Борлуулалтын эрэмбэ унших алдаа:', err.message);
+  }
+
+  return [embed, attendanceEmbed(report), ...financeEmbeds, ...topEmbeds];
+}
+
+// Борлуулалтын эрэмбийн embed — /zarsan болон цалингийн мессежид хамт ашиглана
+function topSoldEmbed(r, title, max) {
+  const rank = (items, n) => items.slice(0, n)
+    .map((it, i) => `\`${String(i + 1).padStart(2)}.\` ${it.name} — **${it.qty.toLocaleString()}ш**`)
+    .join('\n');
+  const total = r.flowers.reduce((s, i) => s + i.qty, 0);
+
+  const embed = new EmbedBuilder()
+    .setColor(0xC9445A)
+    .setTitle(title)
+    .setDescription(r.flowers.length ? rank(r.flowers, max) : 'Энэ хугацаанд хаалтын задаргаа алга.')
+    .setFooter({ text: `${r.from} ~ ${r.to} · ${r.days} өдрийн хаалт · нийт ${total.toLocaleString()} иш цэцэг` })
+    .setTimestamp();
+
+  if (r.others.length) {
+    embed.addFields({ name: '🎀 Боодол, дагалдах бараа', value: rank(r.others, 8), inline: false });
+  }
+  if (r.unknown.length) {
+    embed.addFields({
+      name: '❓ Танигдаагүй товчлол',
+      value: r.unknown.slice(0, 10).map(i => `${i.name} (${i.qty})`).join(', ').slice(0, 1000),
+      inline: false,
+    });
+  }
+  if (r.waste > 0) {
+    embed.addFields({ name: '🥀 Хорогдол', value: `${r.waste.toLocaleString()}ш`, inline: true });
+  }
+  return embed;
+}
+
+// Хорогдол бүртгэх цонх — /horogdol болон хаалтын дараах товч хоёулаа үүнийг нээнэ
+function horogdolModal() {
+  return new ModalBuilder()
+    .setCustomId('horogdol_modal')
+    .setTitle('Хорогдол бүртгэх')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('horogdol')
+          .setLabel('Хорогдсон цэцэг (товчлол-тоо)')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('Са-3 Ро-2\nЛили-1')
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('shaltgaan')
+          .setLabel('Шалтгаан (заавал биш)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Хатсан, хугарсан...')
+          .setRequired(false)
+      ),
+    );
 }
 
 // Ирцийн задаргаа — өдөр бүрийн ирсэн/гарсан цаг (цалинтай хамт явна)

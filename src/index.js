@@ -6,12 +6,32 @@ import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
 import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
 import { wasSentByBot } from './services/messenger.js';
+import { getTopSold } from './services/sheets.js';
 
 const app = express();
 app.use(express.json());
 
 // --- Эрүүл мэндийн шалгалт (Render-д хэрэгтэй) ---
 app.get('/', (req, res) => res.send('🌸 Flower bot ажиллаж байна'));
+
+// --- Их зарагддаг цэцгийн эрэмбэ (пиксел баглааны сайтад) ---
+// Зөвхөн нэрсийг эрэмбээр нь өгнө, борлуулалтын тоог нийтэд ил гаргахгүй. 10 мин кэштэй.
+let topCache = { at: 0, flowers: [] };
+app.get('/api/flowers/top', async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  try {
+    if (Date.now() - topCache.at > 10 * 60 * 1000) {
+      const to = new Date().toISOString().slice(0, 10);
+      const from = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+      const r = await getTopSold(from, to);
+      topCache = { at: Date.now(), flowers: r.flowers.map(f => f.name) };
+    }
+    res.json({ flowers: topCache.flowers });
+  } catch (err) {
+    console.error('top flowers алдаа:', err.message);
+    res.status(503).json({ flowers: [] });
+  }
+});
 
 // --- Нууцлалын бодлого (FB App Review-д шаардлагатай) ---
 app.get('/privacy', (req, res) => {
