@@ -48,7 +48,8 @@
   .build { display: flex; flex-direction: column; }
   .stagewrap { position: relative; flex: 1; min-height: 180px; background: var(--table);
                border-bottom: 2px solid var(--line); }
-  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+           touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #stage g.bloom { cursor: grab; touch-action: none; }
   @media (prefers-reduced-motion: no-preference) {
     #stage g.bloom.new { animation: pop .22s ease-out; }
@@ -59,7 +60,7 @@
           background: var(--panel); color: var(--ink); border: 2px solid var(--line); }
   .chip:disabled { opacity: .4; cursor: default; }
   .chip.danger { background: var(--accent); color: var(--accent-ink); margin-left: auto; }
-  .hint { position: absolute; left: 10px; bottom: 8px; margin: 0; font-size: 12px;
+  .hint { position: absolute; left: 10px; right: 10px; bottom: 8px; margin: 0; font-size: 12px;
           color: var(--table-ink); opacity: .65; pointer-events: none; }
 
   .controls { display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
@@ -174,7 +175,7 @@
         <button class="chip" id="clear" type="button">Цэвэрлэх</button>
         <button class="chip danger" id="remove" type="button" hidden>✕ Хасах</button>
       </div>
-      <p class="hint">Цэцгийг чирж байрлуулна · дарж сонгоно</p>
+      <p class="hint" id="hint">Чирж зөөнө · эсвэл цэцгээ дараад очих газраа дар</p>
     </section>
 
     <section class="controls">
@@ -306,7 +307,8 @@
     { id: 'black', name: 'Хар',    fill: '#2B272F' }
   ];
   var ALL = FLOWERS.concat(FILLERS);
-  var MAX = 18, MAX_FILL = 10, MSG_MAX = 60, CELL = 6, HALF = 21;
+  var MAX = 18, MAX_FILL = 10, MSG_MAX = 60, CELL = 7, HALF = 24.5;
+  var LIFT = 46;   // хуруугаар чирэхэд цэцгийг хурууны дээр гаргах зай (SVG нэгж)
   var BOUNDS = { x0: 70, x1: 330, y0: 44, y1: 236 };
   var GREEN = '#4A7C3F', INK = '#2A1F22';
   var LEAD_HOURS = 2, OPEN = 10, CLOSE = 20;
@@ -363,7 +365,10 @@
     stems.forEach(function (s, i) { var p = slot(i, n, spread); s.x = p.x; s.y = p.y; });
   }
   function lean(s) { return clamp((s.x - 200) * 0.14, -20, 20); }
-  function bloomTransform(s) { return 'translate(' + s.x.toFixed(1) + ',' + s.y.toFixed(1) + ') rotate(' + lean(s).toFixed(1) + ')'; }
+  function bloomTransform(s, held) {
+    return 'translate(' + s.x.toFixed(1) + ',' + s.y.toFixed(1) + ') rotate(' + lean(s).toFixed(1) + ')' + (held ? ' scale(1.2)' : '');
+  }
+  function moveTo(s, x, y) { s.x = clamp(x, BOUNDS.x0, BOUNDS.x1); s.y = clamp(y, BOUNDS.y0, BOUNDS.y1); }
   function stemEnd(s) { return { x: 200 + (s.x - 200) * 0.12, y: 318 }; }
 
   /* ---------- Зураг ---------- */
@@ -409,8 +414,8 @@
       var s = stems[i], f = byId(ALL, s.id);
       out += '<g class="bloom' + (i === fresh && !forExport ? ' new' : '') + '" data-i="' + i + '" tabindex="0" role="button" ' +
              'aria-label="' + esc(f.name) + '" transform="' + bloomTransform(s) + '">' +
-             '<circle r="27" fill="transparent"/>' +                      // хуруунд том бариул
-             (i === sel && !forExport ? '<circle r="29" fill="none" stroke="#C9445A" stroke-width="3" stroke-dasharray="6 5"/>' : '') +
+             '<circle r="32" fill="transparent"/>' +                      // хуруунд том бариул
+             (i === sel && !forExport ? '<circle r="34" fill="none" stroke="#C9445A" stroke-width="3" stroke-dasharray="6 5"/>' : '') +
              '<g transform="translate(' + (-HALF) + ',' + (-HALF) + ')">' + sprite(f) + '</g></g>';
     });
     out += poly('200,426 92,258 200,286 308,258', paper.fill, 3) +
@@ -468,13 +473,16 @@
     $('tidy').disabled = stems.length < 2;
     $('clear').disabled = stems.length === 0;
     $('remove').hidden = sel < 0;
+    $('hint').textContent = sel >= 0
+      ? 'Одоо очих газраа дар · болих бол цэцгээ дахин дар'
+      : 'Чирж зөөнө · эсвэл цэцгээ дараад очих газраа дар';
   }
 
   function tile(f, i, showRank) {
     var c = counts()[f.id] || 0;
     return '<button class="pick" type="button" data-id="' + f.id + '">' +
            (showRank && i < 3 ? '<span class="hot">№' + (i + 1) + '</span>' : '') +
-           '<svg viewBox="0 0 42 42" aria-hidden="true">' + sprite(f) + '</svg>' +
+           '<svg viewBox="0 0 49 49" aria-hidden="true">' + sprite(f) + '</svg>' +
            '<span>' + f.name + '</span><span class="n">' + (c ? c + ' ш' : '&nbsp;') + '</span></button>';
   }
   function renderTray() {
@@ -550,23 +558,33 @@
     return pt.matrixTransform(stage.getScreenCTM().inverse());
   }
   stage.addEventListener('pointerdown', function (e) {
-    var g = e.target.closest('g.bloom');
-    if (!g) { if (sel >= 0) { sel = -1; renderStage(); renderBar(); } return; }
-    var i = Number(g.getAttribute('data-i')), p = toSvg(e);
+    var g = e.target.closest('g.bloom'), p = toSvg(e);
+    if (!g) {
+      // Сонгосон цэцэг байвал хоосон газар дарахад тийшээ зөөнө (чирэхээс хялбар)
+      if (sel >= 0 && stems[sel]) {
+        remember();
+        moveTo(stems[sel], p.x, p.y);
+        renderStage(); renderBar(); saveDraft();
+      }
+      return;
+    }
+    var i = Number(g.getAttribute('data-i'));
     drag = { i: i, g: g, px: p.x, py: p.y, ox: stems[i].x, oy: stems[i].y, moved: false, before: snap(),
+             lift: e.pointerType === 'touch' ? LIFT : 0,
              line: stage.querySelector('line[data-s="' + i + '"]') };
     try { g.setPointerCapture(e.pointerId); } catch (err) { /* дэмжихгүй хөтөч */ }
   });
   stage.addEventListener('pointermove', function (e) {
     if (!drag) return;
     var p = toSvg(e), dx = p.x - drag.px, dy = p.y - drag.py;
-    if (!drag.moved && Math.sqrt(dx * dx + dy * dy) < 5) return;
+    if (!drag.moved && Math.sqrt(dx * dx + dy * dy) < 6) return;
     drag.moved = true;
     e.preventDefault();
     var s = stems[drag.i];
-    s.x = clamp(drag.ox + dx, BOUNDS.x0, BOUNDS.x1);
-    s.y = clamp(drag.oy + dy, BOUNDS.y0, BOUNDS.y1);
-    drag.g.setAttribute('transform', bloomTransform(s));
+    // Хуруугаар бол цэцэг хурууны яг дээр байрлана — хаана тавьж буйгаа харна
+    if (drag.lift) moveTo(s, p.x, p.y - drag.lift);
+    else moveTo(s, drag.ox + dx, drag.oy + dy);
+    drag.g.setAttribute('transform', bloomTransform(s, true));
     if (drag.line) {
       var en = stemEnd(s);
       drag.line.setAttribute('x1', s.x.toFixed(1)); drag.line.setAttribute('y1', s.y.toFixed(1));
