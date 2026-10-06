@@ -1,7 +1,48 @@
 // Google Sheets-тэй харьцах бүх функц энд
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
-import { findAliasGroup } from '../config/aliases.js';
+import { findAliasGroup, NON_FLOWER } from '../config/aliases.js';
+
+// Хамгийн их зарагдсан бараа — "Хаалт задаргаа" tab-аас (Төрөл = Зарсан).
+// Янз бүрээр бичсэн товчлолыг alias толиор нэг нэр дор нэгтгэнэ.
+export async function getTopSold(from, to) {
+  const d = await ensureLoaded();
+  const empty = { from, to, flowers: [], others: [], unknown: [], waste: 0, days: 0 };
+  const sheet = Object.values(d.sheetsByTitle)
+    .find(s => s.title.trim().toLowerCase() === 'хаалт задаргаа');
+  if (!sheet) return empty;
+
+  const rows = await sheet.getRows();
+  const sold = new Map();          // нэр → { qty, known }
+  const dates = new Set();
+  let waste = 0;
+
+  for (const r of rows) {
+    const date = String(r.get('Огноо') || '').trim();
+    if (!date || date < from || date > to) continue;
+    const raw = String(r.get('Товчлол') || '').trim();
+    const qty = Number(String(r.get('Тоо') ?? '').replace(/[^\d.-]/g, '')) || 0;
+    if (!raw || qty <= 0) continue;
+
+    if (/хорогдол/i.test(r.get('Төрөл') || '')) { waste += qty; continue; }
+    dates.add(date);
+
+    const group = findAliasGroup(raw);
+    const name = group ? group.canonical : raw.toLowerCase();
+    const cur = sold.get(name) || { qty: 0, known: !!group };
+    cur.qty += qty;
+    sold.set(name, cur);
+  }
+
+  const all = [...sold].map(([name, v]) => ({ name, qty: v.qty, known: v.known }))
+    .sort((a, b) => b.qty - a.qty);
+  return {
+    from, to, waste, days: dates.size,
+    flowers: all.filter(i => i.known && !NON_FLOWER.has(i.name)),
+    others:  all.filter(i => i.known && NON_FLOWER.has(i.name)),
+    unknown: all.filter(i => !i.known),
+  };
+}
 
 const auth = new JWT({
   email: process.env.GOOGLE_SERVICE_EMAIL,

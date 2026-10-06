@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold } from './sheets.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -53,6 +53,12 @@ const commands = [
   new SlashCommandBuilder()
     .setName('tsalin')
     .setDescription('Энэ хугацааны цалингийн тооцоо харах')
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('zarsan')
+    .setDescription('Хамгийн их зарагдсан цэцэг (хаалтын мэдээллээс)')
+    .addIntegerOption(o => o.setName('honog').setDescription('Сүүлийн хэдэн хоног (default 30)')
+      .setMinValue(1).setMaxValue(365).setRequired(false))
     .toJSON(),
   new SlashCommandBuilder()
     .setName('zeel')
@@ -325,6 +331,48 @@ export async function startDiscord() {
       } catch (err) {
         console.error('aguulah_shine error:', err.message);
         await interaction.editReply('⚠️ Бараа бүртгэхэд алдаа гарлаа.');
+      }
+      return;
+    }
+
+    // /zarsan — хамгийн их зарагдсан цэцэг
+    if (interaction.commandName === 'zarsan') {
+      await interaction.deferReply();
+      try {
+        const days = interaction.options.getInteger('honog') ?? 30;
+        const to = new Date().toISOString().slice(0, 10);
+        const from = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+        const r = await getTopSold(from, to);
+
+        const rank = (items, max) => items.slice(0, max)
+          .map((it, i) => `\`${String(i + 1).padStart(2)}.\` ${it.name} — **${it.qty.toLocaleString()}ш**`)
+          .join('\n');
+        const total = r.flowers.reduce((s, i) => s + i.qty, 0);
+
+        const embed = new EmbedBuilder()
+          .setColor(0xC9445A)
+          .setTitle(`🏆 Хамгийн их зарагдсан цэцэг — сүүлийн ${days} хоног`)
+          .setDescription(r.flowers.length ? rank(r.flowers, 15) : 'Энэ хугацаанд хаалтын задаргаа алга.')
+          .setFooter({ text: `${from} ~ ${to} · ${r.days} өдрийн хаалт · нийт ${total.toLocaleString()} иш цэцэг` })
+          .setTimestamp();
+
+        if (r.others.length) {
+          embed.addFields({ name: '🎀 Боодол, дагалдах бараа', value: rank(r.others, 8), inline: false });
+        }
+        if (r.unknown.length) {
+          embed.addFields({
+            name: '❓ Танигдаагүй товчлол',
+            value: r.unknown.slice(0, 10).map(i => `${i.name} (${i.qty})`).join(', ').slice(0, 1000),
+            inline: false,
+          });
+        }
+        if (r.waste > 0) {
+          embed.addFields({ name: '🥀 Хорогдол', value: `${r.waste.toLocaleString()}ш`, inline: true });
+        }
+        await interaction.editReply({ embeds: [embed] });
+      } catch (err) {
+        console.error('zarsan error:', err.message);
+        await interaction.editReply('⚠️ Борлуулалтын тайлан гаргахад алдаа гарлаа.');
       }
       return;
     }
