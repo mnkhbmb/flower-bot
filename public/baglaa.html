@@ -5,20 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Пиксел баглаа — La Paradiso</title>
 <meta name="description" content="Пиксел цэцгээр баглаагаа өөрөө угсраад захиалаарай. Бид яг тэр загвараар амьд баглаа боож өгнө.">
-<meta name="theme-color" content="#C9445A">
+<meta name="theme-color" content="#FF5757">
+<meta property="og:title" content="Пиксел баглаа — La Paradiso">
+<meta property="og:description" content="Баглаагаа өөрөө угсраад захиалаарай. Бид яг тэр загвараар амьд баглаа боож өгнө.">
+<meta property="og:image" content="https://flower-bot-production-e2f5.up.railway.app/logo.jpg">
+<meta property="og:type" content="website">
+<link rel="icon" href="/logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=League+Spartan:wght@800&family=Montserrat:wght@700;800&family=Rokkitt:wght@500&display=swap">
 <style>
   /* Layout: утсанд нэг дэлгэц — дээр баглаа, доор гүйлгэдэг тавиур, хамгийн доор үргэлжлүүлэх товч */
   :root {
-    --bg: #F2EBE4; --panel: #FFFFFF; --ink: #241B1E; --muted: #6E5A60; --line: #2A1F22;
-    --accent: #C9445A; --accent-ink: #FFFFFF; --soft: #F7DEE3; --bad: #B3261E;
-    --table: #EFE4DA; --table-ink: #2A1F22;   /* ширээ: хоёр горимд ижил гэрэлтэй гадаргуу */
+    --bg: #FDF0F2; --panel: #FFFFFF; --ink: #2B1A1D; --muted: #7A5F65; --line: #2B1A1D;
+    --accent: #E23B41; --accent-ink: #FFFFFF; --soft: #FFE1E4; --bad: #B3261E;
+    --brand: #FF5757;                          /* логоны шүрэн улаан — зөвхөн нэрийн бичигт */
+    --table: #FBD5DF; --table-dot: #FFFFFF; --table-ink: #2B1A1D;   /* ширээ: хоёр горимд ижил */
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #171114; --panel: #221A1E; --ink: #F5EAED; --muted: #AB959C; --line: #534147;
-      --accent: #FF6D85; --accent-ink: #2A1016; --soft: #3B2229; --bad: #FF8A80;
+      --accent: #FF6B6B; --accent-ink: #2A1016; --soft: #3B2229; --bad: #FF8A80; --brand: #FF6B6B;
       color-scheme: dark;
     }
   }
@@ -38,15 +44,21 @@
   .top { display: flex; align-items: center; justify-content: space-between; gap: 10px;
          padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
          border-bottom: 2px solid var(--line); background: var(--panel); }
-  .brand { font-family: "Unbounded", system-ui, sans-serif; font-weight: 800; font-size: 13px;
-           letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+  .brand { display: flex; align-items: center; gap: 5px; white-space: nowrap;
+           font-family: "League Spartan", "Montserrat", system-ui, sans-serif; font-weight: 800;
+           font-size: 19px; line-height: 1; letter-spacing: -.01em; color: var(--brand); }
+  .brand svg { width: 20px; height: 15px; flex: none; }
+  .brand small { font-family: "Rokkitt", Georgia, serif; font-weight: 500; font-size: 10px;
+                 letter-spacing: .16em; color: var(--muted); margin-left: 4px; }
+  @media (max-width: 420px) { .brand small { display: none; } }
   .step { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
   .view { flex: 1; min-height: 0; }
 
   /* --- 1. Угсрах --- */
   .build { display: flex; flex-direction: column; }
-  .stagewrap { position: relative; flex: 1; min-height: 180px; background: var(--table);
+  .stagewrap { position: relative; flex: 1; min-height: 180px;
+               background: radial-gradient(var(--table-dot) 20%, transparent 22%) 0 0 / 26px 26px var(--table);
                border-bottom: 2px solid var(--line); }
   #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
            touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -96,7 +108,7 @@
          padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
          border-top: 2px solid var(--line); background: var(--panel); }
   .cta .sum { font-size: 13px; color: var(--muted); min-width: 0; }
-  .cta .sum b { font-family: "Unbounded", system-ui, sans-serif; font-size: 17px; color: var(--ink); }
+  .cta .sum b { font-family: "Montserrat", system-ui, sans-serif; font-size: 17px; color: var(--ink); }
 
   .btn { padding: 12px 18px; font-weight: 700; cursor: pointer; border: 2px solid var(--line);
          background: var(--panel); color: var(--ink); box-shadow: 3px 3px 0 var(--line);
@@ -121,7 +133,7 @@
   /* --- 2. Мэдээлэл, 3. Дууссан --- */
   .scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .sheet { max-width: 540px; margin: 0 auto; padding: 16px 16px calc(28px + env(safe-area-inset-bottom, 0px)); }
-  .sheet h1 { font-family: "Unbounded", system-ui, sans-serif; font-weight: 600; font-size: 22px;
+  .sheet h1 { font-family: "Montserrat", system-ui, sans-serif; font-weight: 600; font-size: 22px;
               line-height: 1.2; margin: 14px 0 6px; text-wrap: balance; }
   .back { background: none; border: 0; padding: 6px 0; color: var(--accent); font-weight: 600; cursor: pointer; }
   .recap { display: flex; gap: 12px; align-items: center; padding: 10px; margin: 10px 0 18px;
@@ -151,7 +163,7 @@
   .fine { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
 
   .done { text-align: center; }
-  .done .oid { font-family: "Unbounded", system-ui, sans-serif; font-weight: 800; font-size: 30px;
+  .done .oid { font-family: "Montserrat", system-ui, sans-serif; font-weight: 800; font-size: 30px;
                color: var(--accent); margin: 4px 0 2px; letter-spacing: .02em; }
   .done img { width: 100%; max-width: 300px; height: auto; border: 2px solid var(--line);
               box-shadow: 4px 4px 0 var(--line); background: var(--table); margin: 14px auto; display: block; }
@@ -161,7 +173,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand">La Paradiso</div>
+    <div class="brand" aria-label="La Paradiso floral studio">LA<svg viewBox="0 0 8 6" aria-hidden="true" shape-rendering="crispEdges"><rect x="0" y="1" width="2" height="3" fill="#2B1A1D"/><rect x="2" y="0" width="4" height="1" fill="#E23B41"/><rect x="2" y="1" width="5" height="3" fill="#E23B41"/><rect x="7" y="2" width="1" height="2" fill="#E23B41"/><rect x="3" y="4" width="4" height="1" fill="#E23B41"/><rect x="3" y="2" width="1" height="1" fill="#2B1A1D"/><rect x="5" y="1" width="1" height="1" fill="#2B1A1D"/><rect x="6" y="3" width="1" height="1" fill="#2B1A1D"/><rect x="2" y="5" width="1" height="1" fill="#2B1A1D"/><rect x="5" y="5" width="1" height="1" fill="#2B1A1D"/></svg>PARADISO.<small>FLORAL STUDIO</small></div>
     <div class="step" id="step">1 / 2 · Баглаагаа угсар</div>
   </header>
 
@@ -415,7 +427,7 @@
       out += '<g class="bloom' + (i === fresh && !forExport ? ' new' : '') + '" data-i="' + i + '" tabindex="0" role="button" ' +
              'aria-label="' + esc(f.name) + '" transform="' + bloomTransform(s) + '">' +
              '<circle r="32" fill="transparent"/>' +                      // хуруунд том бариул
-             (i === sel && !forExport ? '<circle r="34" fill="none" stroke="#C9445A" stroke-width="3" stroke-dasharray="6 5"/>' : '') +
+             (i === sel && !forExport ? '<circle r="34" fill="none" stroke="#E23B41" stroke-width="3" stroke-dasharray="6 5"/>' : '') +
              '<g transform="translate(' + (-HALF) + ',' + (-HALF) + ')">' + sprite(f) + '</g></g>';
     });
     out += poly('200,426 92,258 200,286 308,258', paper.fill, 3) +
@@ -439,12 +451,26 @@
     return out;
   }
 
+  // Логоны цох хорхой — пикселээр
+  function ladybug(x, y, c) {
+    var K = '#2B1A1D', R = '#E23B41', px = [
+      [0, 1, 2, 3, K], [2, 0, 4, 1, R], [2, 1, 5, 3, R], [7, 2, 1, 2, R], [3, 4, 4, 1, R],
+      [3, 2, 1, 1, K], [5, 1, 1, 1, K], [6, 3, 1, 1, K], [2, 5, 1, 1, K], [5, 5, 1, 1, K]
+    ];
+    return px.map(function (r) {
+      return '<rect x="' + (x + r[0] * c) + '" y="' + (y + r[1] * c) + '" width="' + (r[2] * c) + '" height="' + (r[3] * c) + '" fill="' + r[4] + '"/>';
+    }).join('');
+  }
+
   // Баглааг PNG болгоно (амжилтгүй бол null)
   function makePng() {
     return new Promise(function (resolve) {
       var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="880" viewBox="0 0 400 440">' +
-                '<rect width="400" height="440" fill="#EFE4DA"/>' + scene(true) +
-                '<text x="14" y="428" font-family="sans-serif" font-size="11" font-weight="700" fill="#C9445A" letter-spacing="2">LA PARADISO</text></svg>';
+                '<defs><pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">' +
+                '<rect width="22" height="22" fill="#FBD5DF"/><circle cx="11" cy="11" r="3.4" fill="#FFFFFF"/></pattern></defs>' +
+                '<rect width="400" height="440" fill="url(#dots)"/>' + scene(true) +
+                '<rect x="8" y="412" width="132" height="22" fill="#FFFFFF"/>' + ladybug(14, 417, 2) +
+                '<text x="35" y="428" font-family="sans-serif" font-size="11" font-weight="700" fill="#E23B41" letter-spacing="1.5">LA PARADISO.</text></svg>';
       var img = new Image();
       img.onload = function () {
         try {

@@ -22,6 +22,7 @@ app.get('/', (req, res) => res.send('🌸 Flower bot ажиллаж байна')
 
 // --- Пиксел баглааны сайт ---
 app.get('/baglaa', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'baglaa.html')));
+app.get('/logo.jpg', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'logo.jpg'), { maxAge: '7d' }));
 app.post('/api/orders', handleWebOrder);
 
 // --- Их зарагддаг цэцгийн эрэмбэ (пиксел баглааны сайтад) ---
