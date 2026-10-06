@@ -88,7 +88,7 @@ export async function addOrder(order) {
     'Хүргэх огноо': order.deliveryDate || '',
     'Статус': 'Хүлээгдэж байна',
     'Төлбөр': 'Хүлээгдэж байна',
-    'Эх сурвалж': 'FB Messenger',
+    'Эх сурвалж': order.source || 'FB Messenger',
     'Тэмдэглэл': order.note || '',
   });
 

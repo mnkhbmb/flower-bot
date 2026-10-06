@@ -1,5 +1,5 @@
 // Discord bot — мэдэгдэл болон тайлан
-import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting } from './sheets.js';
 import { readInvoice } from './vision.js';
 
@@ -624,6 +624,39 @@ export async function notifyNewOrder(order) {
     embed.addFields({ name: '📝 Тэмдэглэл', value: order.note.slice(0, 1000), inline: false });
   }
   await channel.send({ embeds: [embed] });
+}
+
+// Пиксел баглааны сайтаас ирсэн захиалга — харилцагчийн угсарсан зурагтай хамт
+export async function notifyWebOrder(order, d, image) {
+  const channel = await client.channels.fetch(process.env.DISCORD_ORDER_CHANNEL_ID);
+  const embed = new EmbedBuilder()
+    .setColor(0xC9445A)
+    .setTitle(`🎨 Пиксел баглааны захиалга ${order.orderId}`)
+    .setDescription(`**${order.name}** · ${order.phone}`)
+    .addFields(
+      { name: `🌸 Цэцэг (${d.stems} иш)`, value: d.flowers || '—', inline: false },
+      { name: '🌿 Чимэглэл', value: d.fillers || 'Байхгүй', inline: true },
+      { name: '📄 Цаас', value: d.paper, inline: true },
+      { name: '🎀 Тууз', value: d.ribbon, inline: true },
+      { name: '🕙 Хэзээ', value: d.when, inline: true },
+      { name: '🚚 Хүлээн авах', value: order.delivery ? `Хүргэлт: ${order.address}` : 'Очиж авна', inline: true },
+      { name: '🔁 Солих', value: d.allowSwap ? 'Зөвшөөрсөн' : '**Солихгүй**', inline: true },
+    )
+    .setFooter({ text: 'Үнээ баталгаажуулаад харилцагчтай холбогдоно уу' })
+    .setTimestamp();
+
+  if (d.message) embed.addFields({ name: '💌 Мэндчилгээний карт', value: `“${d.message}”`, inline: false });
+  if (d.recipientName || d.recipientPhone) {
+    embed.addFields({ name: '🎁 Хүлээн авагч', value: [d.recipientName, d.recipientPhone].filter(Boolean).join(' · '), inline: false });
+  }
+  if (d.note) embed.addFields({ name: '📝 Тэмдэглэл', value: d.note, inline: false });
+
+  const payload = { embeds: [embed] };
+  if (image) {
+    embed.setImage('attachment://baglaa.png');
+    payload.files = [new AttachmentBuilder(image, { name: 'baglaa.png' })];
+  }
+  await channel.send(payload);
 }
 
 // Банкны гүйлгээ (зардал) орж ирэхэд #зардал руу мэдэгдэл

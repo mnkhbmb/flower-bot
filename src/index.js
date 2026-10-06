@@ -2,17 +2,27 @@
 import 'dotenv/config';
 import express from 'express';
 import cron from 'node-cron';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
 import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
 import { wasSentByBot } from './services/messenger.js';
 import { getTopSold } from './services/sheets.js';
+import { handleWebOrder } from './handlers/webOrder.js';
+
+const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 const app = express();
-app.use(express.json());
+app.set('trust proxy', 1);                 // Railway-ийн proxy-ийн цаана жинхэнэ IP-г авна
+app.use(express.json({ limit: '1mb' }));   // вэб захиалга баглааны зурагтай ирдэг
 
 // --- Эрүүл мэндийн шалгалт (Render-д хэрэгтэй) ---
 app.get('/', (req, res) => res.send('🌸 Flower bot ажиллаж байна'));
+
+// --- Пиксел баглааны сайт ---
+app.get('/baglaa', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'baglaa.html')));
+app.post('/api/orders', handleWebOrder);
 
 // --- Их зарагддаг цэцгийн эрэмбэ (пиксел баглааны сайтад) ---
 // Зөвхөн нэрсийг эрэмбээр нь өгнө, борлуулалтын тоог нийтэд ил гаргахгүй. 10 мин кэштэй.

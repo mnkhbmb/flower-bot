@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Пиксел баглаа — La Paradiso</title>
+<meta name="description" content="Пиксел цэцгээр баглаагаа өөрөө угсраад захиалаарай. Бид яг тэр загвараар амьд баглаа боож өгнө.">
+<meta name="theme-color" content="#C9445A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@600;800&display=swap">
+<style>
+  /* Layout: утсанд нэг дэлгэц — дээр баглаа, доор гүйлгэдэг тавиур, хамгийн доор үргэлжлүүлэх товч */
+  :root {
+    --bg: #F2EBE4; --panel: #FFFFFF; --ink: #241B1E; --muted: #6E5A60; --line: #2A1F22;
+    --accent: #C9445A; --accent-ink: #FFFFFF; --soft: #F7DEE3; --bad: #B3261E;
+    --table: #EFE4DA; --table-ink: #2A1F22;   /* ширээ: хоёр горимд ижил гэрэлтэй гадаргуу */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171114; --panel: #221A1E; --ink: #F5EAED; --muted: #AB959C; --line: #534147;
+      --accent: #FF6D85; --accent-ink: #2A1016; --soft: #3B2229; --bad: #FF8A80;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink);
+         font-family: "Golos Text", system-ui, sans-serif; font-size: 15px; line-height: 1.5;
+         -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+  [hidden] { display: none !important; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .app { height: 100vh; height: 100dvh; display: flex; flex-direction: column;
+         max-width: 1100px; margin: 0 auto; }
+
+  /* --- Толгой --- */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+         padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
+         border-bottom: 2px solid var(--line); background: var(--panel); }
+  .brand { font-family: "Unbounded", system-ui, sans-serif; font-weight: 800; font-size: 13px;
+           letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+  .step { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .view { flex: 1; min-height: 0; }
+
+  /* --- 1. Угсрах --- */
+  .build { display: flex; flex-direction: column; }
+  .stagewrap { position: relative; flex: 1; min-height: 180px; background: var(--table);
+               border-bottom: 2px solid var(--line); }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #stage g.bloom { cursor: grab; touch-action: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    #stage g.bloom.new { animation: pop .22s ease-out; }
+    @keyframes pop { from { opacity: 0 } to { opacity: 1 } }
+  }
+  .chips { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+          background: var(--panel); color: var(--ink); border: 2px solid var(--line); }
+  .chip:disabled { opacity: .4; cursor: default; }
+  .chip.danger { background: var(--accent); color: var(--accent-ink); margin-left: auto; }
+  .hint { position: absolute; left: 10px; bottom: 8px; margin: 0; font-size: 12px;
+          color: var(--table-ink); opacity: .65; pointer-events: none; }
+
+  .controls { display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+  .tabs { display: flex; border-bottom: 2px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 1 0 auto; min-width: 66px; padding: 11px 8px; border: 0; border-right: 1px solid var(--line);
+         background: var(--panel); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .tab:last-child { border-right: 0; }
+  .tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+
+  .tray { display: flex; gap: 8px; padding: 10px 12px; height: 116px;
+          overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+  .pick { position: relative; flex: 0 0 78px; display: grid; justify-items: center; align-content: center; gap: 1px;
+          padding: 6px 2px; background: var(--panel); color: var(--ink);
+          border: 2px solid var(--line); cursor: pointer; font-size: 12px; font-weight: 500; line-height: 1.2; }
+  .pick:active:not(:disabled) { background: var(--soft); }
+  .pick:disabled { opacity: .4; cursor: not-allowed; }
+  .pick svg { width: 38px; height: 38px; display: block; }
+  .pick .n { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11px; }
+  .pick .hot { position: absolute; top: -2px; left: -2px; padding: 0 5px; font-size: 10px; font-weight: 700;
+               background: var(--accent); color: var(--accent-ink); }
+  .swt { flex: 0 0 72px; display: grid; justify-items: center; align-content: center; gap: 6px;
+         background: var(--panel); color: var(--ink); border: 2px solid var(--line);
+         cursor: pointer; font-size: 12px; font-weight: 500; }
+  .swt i { width: 36px; height: 36px; border: 2px solid var(--line); display: block; }
+  .swt[aria-pressed="true"] { background: var(--soft); box-shadow: inset 0 0 0 3px var(--accent); }
+  .cardbox { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .cardbox textarea { flex: 1; width: 100%; resize: none; font-size: 16px; padding: 8px 10px;
+                      background: var(--panel); border: 2px solid var(--line); border-radius: 0; }
+  .cardbox .count { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+  .cta { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+         padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+         border-top: 2px solid var(--line); background: var(--panel); }
+  .cta .sum { font-size: 13px; color: var(--muted); min-width: 0; }
+  .cta .sum b { font-family: "Unbounded", system-ui, sans-serif; font-size: 17px; color: var(--ink); }
+
+  .btn { padding: 12px 18px; font-weight: 700; cursor: pointer; border: 2px solid var(--line);
+         background: var(--panel); color: var(--ink); box-shadow: 3px 3px 0 var(--line);
+         text-decoration: none; display: inline-block; text-align: center; }
+  .btn:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.wide { width: 100%; }
+
+  @media (min-width: 900px) {
+    .build { display: grid; grid-template-columns: 1.1fr .9fr; grid-template-rows: 1fr auto; }
+    .stagewrap { grid-row: 1 / span 2; border-bottom: 0; border-right: 2px solid var(--line); }
+    .controls { grid-column: 2; }
+    .tray { flex: 1; height: auto; flex-wrap: wrap; align-content: flex-start;
+            overflow-x: hidden; overflow-y: auto; padding: 14px; }
+    .pick { flex: 0 0 96px; height: 104px; }
+    .swt { flex: 0 0 96px; height: 96px; }
+    .cardbox { height: 160px; flex: 1 0 100%; }
+    .cta { grid-column: 2; }
+  }
+
+  /* --- 2. Мэдээлэл, 3. Дууссан --- */
+  .scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .sheet { max-width: 540px; margin: 0 auto; padding: 16px 16px calc(28px + env(safe-area-inset-bottom, 0px)); }
+  .sheet h1 { font-family: "Unbounded", system-ui, sans-serif; font-weight: 600; font-size: 22px;
+              line-height: 1.2; margin: 14px 0 6px; text-wrap: balance; }
+  .back { background: none; border: 0; padding: 6px 0; color: var(--accent); font-weight: 600; cursor: pointer; }
+  .recap { display: flex; gap: 12px; align-items: center; padding: 10px; margin: 10px 0 18px;
+           background: var(--panel); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--line); }
+  .recap img { width: 84px; height: auto; flex: none; border: 2px solid var(--line); background: var(--table); }
+  .recap p { margin: 0; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+  .recap b { display: block; font-size: 14px; }
+
+  .f { margin-bottom: 14px; }
+  .f label, .f .lab { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+  .f input[type="text"], .f input[type="tel"], .f input[type="date"], .f select, .f textarea {
+    width: 100%; font-size: 16px; padding: 11px 12px; background: var(--panel);
+    border: 2px solid var(--line); border-radius: 0; min-height: 48px; }
+  .f textarea { min-height: 72px; resize: vertical; }
+  .f .err { color: var(--bad); font-size: 13px; margin-top: 4px; }
+  .f.bad input, .f.bad select, .f.bad textarea { border-color: var(--bad); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; }
+  .seg button { padding: 12px 8px; border: 2px solid var(--line); background: var(--panel);
+                font-weight: 600; cursor: pointer; }
+  .seg button + button { border-left: 0; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+  .check input { width: 22px; height: 22px; flex: none; margin: 1px 0 0; accent-color: var(--accent); }
+  .trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  .formerr { color: var(--bad); font-weight: 600; margin: 0 0 12px; }
+  .fine { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
+
+  .done { text-align: center; }
+  .done .oid { font-family: "Unbounded", system-ui, sans-serif; font-weight: 800; font-size: 30px;
+               color: var(--accent); margin: 4px 0 2px; letter-spacing: .02em; }
+  .done img { width: 100%; max-width: 300px; height: auto; border: 2px solid var(--line);
+              box-shadow: 4px 4px 0 var(--line); background: var(--table); margin: 14px auto; display: block; }
+  .stack { display: grid; gap: 10px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">La Paradiso</div>
+    <div class="step" id="step">1 / 2 · Баглаагаа угсар</div>
+  </header>
+
+  <!-- 1. Угсрах -->
+  <main class="view build" id="vBuild">
+    <section class="stagewrap" aria-label="Баглаа">
+      <svg id="stage" viewBox="0 0 400 440" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Угсарч буй баглаа"></svg>
+      <div class="chips">
+        <button class="chip" id="undo" type="button" disabled>↶ Буцаах</button>
+        <button class="chip" id="tidy" type="button">Цэгцлэх</button>
+        <button class="chip" id="clear" type="button">Цэвэрлэх</button>
+        <button class="chip danger" id="remove" type="button" hidden>✕ Хасах</button>
+      </div>
+      <p class="hint">Цэцгийг чирж байрлуулна · дарж сонгоно</p>
+    </section>
+
+    <section class="controls">
+      <nav class="tabs" role="tablist" aria-label="Сонголтууд">
+        <button class="tab" role="tab" data-tab="flowers" aria-selected="true">Цэцэг</button>
+        <button class="tab" role="tab" data-tab="fillers" aria-selected="false">Чимэглэл</button>
+        <button class="tab" role="tab" data-tab="paper" aria-selected="false">Цаас</button>
+        <button class="tab" role="tab" data-tab="ribbon" aria-selected="false">Тууз</button>
+        <button class="tab" role="tab" data-tab="card" aria-selected="false">Карт</button>
+      </nav>
+      <div class="tray" id="tray"></div>
+    </section>
+
+    <footer class="cta">
+      <div class="sum"><b id="total">0</b> иш<span id="extra"></span></div>
+      <button class="btn primary" id="next" type="button">Үргэлжлүүлэх →</button>
+    </footer>
+  </main>
+
+  <!-- 2. Мэдээлэл -->
+  <main class="view scroll" id="vForm" hidden>
+    <form class="sheet" id="form" novalidate>
+      <button class="back" type="button" id="back">← Баглаа руу буцах</button>
+      <h1>Хэнд, хэзээ хүргэх вэ?</h1>
+      <div class="recap"><img id="recapImg" alt="Таны угсарсан баглаа"><p id="recapText"></p></div>
+
+      <div class="f" data-f="name"><label for="name">Таны нэр</label>
+        <input id="name" type="text" autocomplete="name" maxlength="40"></div>
+      <div class="f" data-f="phone"><label for="phone">Утасны дугаар</label>
+        <input id="phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="12" placeholder="99112233"></div>
+
+      <div class="f"><span class="lab">Хүлээн авах хэлбэр</span>
+        <div class="seg">
+          <button type="button" id="segPickup" aria-pressed="true">Очиж авна</button>
+          <button type="button" id="segDelivery" aria-pressed="false">Хүргүүлнэ</button>
+        </div></div>
+      <div class="f" data-f="address" id="addressBox" hidden><label for="address">Хүргэх хаяг</label>
+        <textarea id="address" maxlength="200" autocomplete="street-address" placeholder="Дүүрэг, хороо, байр, тоот"></textarea></div>
+
+      <div class="two">
+        <div class="f" data-f="date"><label for="date">Өдөр</label><input id="date" type="date"></div>
+        <div class="f" data-f="time"><label for="time">Цаг</label><select id="time"></select></div>
+      </div>
+
+      <div class="f"><label class="check"><input type="checkbox" id="gift">
+        <span>Бэлэг — өөр хүн хүлээж авна</span></label></div>
+      <div id="giftBox" hidden>
+        <div class="f"><label for="rname">Хүлээн авагчийн нэр</label>
+          <input id="rname" type="text" maxlength="40"></div>
+        <div class="f" data-f="rphone"><label for="rphone">Хүлээн авагчийн утас</label>
+          <input id="rphone" type="tel" inputmode="numeric" maxlength="12"></div>
+      </div>
+
+      <div class="f"><label class="check"><input type="checkbox" id="swap" checked>
+        <span>Сонгосон цэцэг дууссан бол ойролцоо цэцгээр солихыг зөвшөөрнө</span></label></div>
+
+      <div class="f"><label for="note">Нэмэлт хүсэлт (заавал биш)</label>
+        <textarea id="note" maxlength="200"></textarea></div>
+
+      <input class="trap" type="text" id="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+      <p class="formerr" id="formErr" hidden role="alert"></p>
+      <button class="btn primary wide" id="send" type="submit">Захиалга илгээх</button>
+      <p class="fine">Үнийг ажилтан баталгаажуулаад тантай утсаар холбогдоно. Одоо төлбөр авахгүй.</p>
+    </form>
+  </main>
+
+  <!-- 3. Дууссан -->
+  <main class="view scroll" id="vDone" hidden>
+    <div class="sheet done">
+      <h1>Захиалга хүлээн авлаа</h1>
+      <div class="oid" id="oid"></div>
+      <p>Ажилтан үнээ баталгаажуулаад тантай удахгүй холбогдоно.</p>
+      <img id="doneImg" alt="Таны захиалсан пиксел баглаа">
+      <div class="stack">
+        <a class="btn primary" id="save" download="la-paradiso-baglaa.png">Зураг хадгалах</a>
+        <button class="btn" id="share" type="button" hidden>Хуваалцах</button>
+        <a class="btn" href="https://m.me/LaParadisoMN" target="_blank" rel="noopener">Messenger-ээр холбогдох</a>
+        <button class="btn" id="again" type="button">Шинэ баглаа угсрах</button>
+      </div>
+      <p class="fine">Зураг хадгалагдахгүй бол зураг дээр удаан дарж хадгална уу.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- Каталог (id-ууд src/config/pixelCatalog.js-тэй таарах ёстой) ---------- */
+  var SHAPES = {
+    round: ['..PPP..', '.PPPPP.', 'PPPCPPP', 'PPCCCPP', 'PPPCPPP', '.PPPPP.', '..PPP..'],
+    ray:   ['...P...', '.P.P.P.', '..PCP..', 'PPCCCPP', '..PCP..', '.P.P.P.', '...P...'],
+    bell:  ['.P...P.', '.PP.PP.', '..PPP..', '.PPCPP.', '.PPPPP.', '..PPP..', '...P...'],
+    spray: ['.P.P.P.', 'P.PCP.P', '.PPPPP.', 'P.PCP.P', '.P.P.P.', '..PPP..', '...P...'],
+    grass: ['.P...P.', '.P.P.P.', 'P..P..P', 'P.PP.P.', '.PPPPP.', '..PPP..', '...P...'],
+    leaf:  ['...P...', '..PPP..', '.PPCPP.', '.PPCPP.', '.PPCPP.', '..PCP..', '...C...'],
+    tiny:  ['P..P..P', '.C.C.C.', 'P.CPC.P', '.C.C.C.', '..PCP..', '...C...', '...C...']
+  };
+  var FLOWERS = [
+    { id: 'sarnai',   key: 'сарнай',      name: 'Сарнай',     shape: 'round', P: '#E0455F', C: '#A32442' },
+    { id: 'tseene',   key: 'цээнэ',       name: 'Цээнэ',      shape: 'round', P: '#F392B8', C: '#CE5B8B' },
+    { id: 'romashka', key: 'ромашка',     name: 'Ромашка',    shape: 'ray',   P: '#FBF7F0', C: '#F2B705' },
+    { id: 'gerbera',  key: 'гербера',     name: 'Гербера',    shape: 'ray',   P: '#FF7A3C', C: '#8E3C18' },
+    { id: 'narants',  key: 'наран цэцэг', name: 'Наранцэцэг', shape: 'ray',   P: '#F5C32C', C: '#7A4A12' },
+    { id: 'lili',     key: 'лили',        name: 'Лили',       shape: 'bell',  P: '#FBE7F0', C: '#E58FB4' },
+    { id: 'udval',    key: 'удвал',       name: 'Удвал',      shape: 'bell',  P: '#9A6BD8', C: '#5F349A' },
+    { id: 'matiol',   key: 'матиола',     name: 'Матиола',    shape: 'spray', P: '#C77DFF', C: '#8646CF' },
+    { id: 'statis',   key: 'статис',      name: 'Статис',     shape: 'spray', P: '#6E8CE0', C: '#3B56A3' }
+  ];
+  var FILLERS = [
+    { id: 'uvs',   name: 'Өвс',         shape: 'grass', P: '#5E9A4E', C: '#5E9A4E' },
+    { id: 'navch', name: 'Навч',        shape: 'leaf',  P: '#6DA95D', C: '#3F7036' },
+    { id: 'jijig', name: 'Жижиг цэцэг', shape: 'tiny',  P: '#FFFFFF', C: '#6DA95D' }
+  ];
+  var PAPERS = [
+    { id: 'kraft', name: 'Крафт',    fill: '#D9C3A0', back: '#C4AB84' },
+    { id: 'white', name: 'Цагаан',   fill: '#F8F5EF', back: '#DDD6CA' },
+    { id: 'pink',  name: 'Ягаан',    fill: '#F3BCC9', back: '#DD98A9' },
+    { id: 'lilac', name: 'Голт бор', fill: '#CDB9E8', back: '#AE96D0' },
+    { id: 'black', name: 'Хар',      fill: '#34303A', back: '#1F1C24' }
+  ];
+  var RIBBONS = [
+    { id: 'red',   name: 'Улаан',  fill: '#D2283F' },
+    { id: 'pink',  name: 'Ягаан',  fill: '#F27FA5' },
+    { id: 'white', name: 'Цагаан', fill: '#FFFDF8' },
+    { id: 'gold',  name: 'Алтлаг', fill: '#D9A93A' },
+    { id: 'blue',  name: 'Цэнхэр', fill: '#4F7FD6' },
+    { id: 'black', name: 'Хар',    fill: '#2B272F' }
+  ];
+  var ALL = FLOWERS.concat(FILLERS);
+  var MAX = 18, MAX_FILL = 10, MSG_MAX = 60, CELL = 6, HALF = 21;
+  var BOUNDS = { x0: 70, x1: 330, y0: 44, y1: 236 };
+  var GREEN = '#4A7C3F', INK = '#2A1F22';
+  var LEAD_HOURS = 2, OPEN = 10, CLOSE = 20;
+  var DRAFT_KEY = 'lp_baglaa_v1';
+
+  /* ---------- Төлөв ---------- */
+  var stems = [], paperId = 'kraft', ribbonId = 'red', message = '';
+  var sel = -1, fresh = -1, tab = 'flowers', ranked = false;
+  var history = [], delivery = false, lastPng = null;
+
+  function $(id) { return document.getElementById(id); }
+  function byId(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+  function isFiller(id) { return !!byId(FILLERS, id); }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  function counts() { var m = {}; stems.forEach(function (s) { m[s.id] = (m[s.id] || 0) + 1; }); return m; }
+  function flowerCount() { return stems.filter(function (s) { return !isFiller(s.id); }).length; }
+
+  /* ---------- Хадгалалт, буцаах ---------- */
+  function saveDraft() {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ stems: stems, paperId: paperId, ribbonId: ribbonId, message: message })); }
+    catch (e) { /* хадгалах боломжгүй бол алгасна */ }
+  }
+  function loadDraft() {
+    try {
+      var d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+      if (!d || !Array.isArray(d.stems)) return false;
+      stems = d.stems.filter(function (s) { return s && byId(ALL, s.id) && isFinite(s.x) && isFinite(s.y); })
+        .slice(0, MAX + MAX_FILL)
+        .map(function (s) { return { id: s.id, x: clamp(+s.x, BOUNDS.x0, BOUNDS.x1), y: clamp(+s.y, BOUNDS.y0, BOUNDS.y1) }; });
+      if (byId(PAPERS, d.paperId)) paperId = d.paperId;
+      if (byId(RIBBONS, d.ribbonId)) ribbonId = d.ribbonId;
+      message = String(d.message || '').slice(0, MSG_MAX);
+      return true;
+    } catch (e) { return false; }
+  }
+  function snap() { return JSON.stringify({ stems: stems, paperId: paperId, ribbonId: ribbonId }); }
+  function remember() { history.push(snap()); if (history.length > 40) history.shift(); }
+  function undo() {
+    var s = history.pop(); if (!s) return;
+    var d = JSON.parse(s); stems = d.stems; paperId = d.paperId; ribbonId = d.ribbonId; sel = -1;
+    renderAll();
+  }
+
+  /* ---------- Байрлал ---------- */
+  function slot(i, n, spread) {
+    var r = n <= 1 ? 0 : spread * Math.sqrt((i + 0.5) / n), a = i * 2.39996;
+    return { x: clamp(200 + r * Math.cos(a) * 1.2, BOUNDS.x0, BOUNDS.x1),
+             y: clamp(160 + r * Math.sin(a) * 0.74, BOUNDS.y0, BOUNDS.y1) };
+  }
+  function tidy() {
+    var n = stems.length, spread = Math.min(112, 30 + 22 * Math.sqrt(n));
+    stems.forEach(function (s, i) { var p = slot(i, n, spread); s.x = p.x; s.y = p.y; });
+  }
+  function lean(s) { return clamp((s.x - 200) * 0.14, -20, 20); }
+  function bloomTransform(s) { return 'translate(' + s.x.toFixed(1) + ',' + s.y.toFixed(1) + ') rotate(' + lean(s).toFixed(1) + ')'; }
+  function stemEnd(s) { return { x: 200 + (s.x - 200) * 0.12, y: 318 }; }
+
+  /* ---------- Зураг ---------- */
+  function sprite(f) {
+    var rows = SHAPES[f.shape], out = '';
+    for (var y = 0; y < rows.length; y++) for (var x = 0; x < rows[y].length; x++) {
+      var ch = rows[y].charAt(x);
+      if (ch === '.') continue;
+      out += '<rect x="' + (x * CELL) + '" y="' + (y * CELL) + '" width="' + CELL + '" height="' + CELL +
+             '" fill="' + (ch === 'P' ? f.P : f.C) + '"/>';
+    }
+    return out;
+  }
+  function wrapText(str, maxLen, maxLines) {
+    var words = String(str).trim().split(/\s+/), lines = [], cur = '';
+    words.forEach(function (w) {
+      while (w.length > maxLen) { if (cur) { lines.push(cur); cur = ''; } lines.push(w.slice(0, maxLen)); w = w.slice(maxLen); }
+      if (!w) return;
+      if (!cur) cur = w;
+      else if ((cur + ' ' + w).length <= maxLen) cur += ' ' + w;
+      else { lines.push(cur); cur = w; }
+    });
+    if (cur) lines.push(cur);
+    return lines.slice(0, maxLines);
+  }
+  function scene(forExport) {
+    var paper = byId(PAPERS, paperId), ribbon = byId(RIBBONS, ribbonId), n = stems.length, out = '';
+    var poly = function (pts, fill, w) {
+      return '<polygon points="' + pts + '" fill="' + fill + '" stroke="' + INK + '" stroke-width="' + (w || 2.5) + '" stroke-linejoin="round"/>';
+    };
+    out += poly('200,414 58,232 92,112 200,146 308,112 342,232', paper.back, 3);
+    if (n === 0) {
+      out += '<text x="200" y="196" text-anchor="middle" fill="' + INK + '" opacity=".6" ' +
+             'font-family="Golos Text, sans-serif" font-size="15">Доороос цэцэг дарж нэмнэ</text>';
+    }
+    stems.forEach(function (s, i) {
+      var e = stemEnd(s);
+      out += '<line data-s="' + i + '" x1="' + s.x.toFixed(1) + '" y1="' + s.y.toFixed(1) + '" x2="' + e.x.toFixed(1) +
+             '" y2="' + e.y + '" stroke="' + GREEN + '" stroke-width="5" shape-rendering="crispEdges"/>';
+    });
+    var order = stems.map(function (_, i) { return i; }).sort(function (a, b) { return stems[a].y - stems[b].y; });
+    order.forEach(function (i) {
+      var s = stems[i], f = byId(ALL, s.id);
+      out += '<g class="bloom' + (i === fresh && !forExport ? ' new' : '') + '" data-i="' + i + '" tabindex="0" role="button" ' +
+             'aria-label="' + esc(f.name) + '" transform="' + bloomTransform(s) + '">' +
+             '<circle r="27" fill="transparent"/>' +                      // хуруунд том бариул
+             (i === sel && !forExport ? '<circle r="29" fill="none" stroke="#C9445A" stroke-width="3" stroke-dasharray="6 5"/>' : '') +
+             '<g transform="translate(' + (-HALF) + ',' + (-HALF) + ')">' + sprite(f) + '</g></g>';
+    });
+    out += poly('200,426 92,258 200,286 308,258', paper.fill, 3) +
+           '<line x1="200" y1="288" x2="200" y2="422" stroke="' + INK + '" stroke-width="2" opacity=".18"/>' +
+           poly('136,326 264,326 253,344 147,344', ribbon.fill) +
+           poly('196,342 185,374 197,367', ribbon.fill) + poly('204,342 215,374 203,367', ribbon.fill) +
+           poly('200,335 171,318 171,352', ribbon.fill) + poly('200,335 229,318 229,352', ribbon.fill) +
+           '<rect x="193" y="328" width="14" height="14" fill="' + ribbon.fill + '" stroke="' + INK + '" stroke-width="2.5"/>';
+    var lines = message.trim() ? wrapText(message, 16, 4) : [];
+    if (lines.length) {
+      out += '<line x1="206" y1="338" x2="279" y2="356" stroke="' + INK + '" stroke-width="1.5"/>' +
+             '<g transform="translate(270,346) rotate(7)"><rect width="106" height="68" fill="#FFFDF8" stroke="' + INK +
+             '" stroke-width="2.5"/><circle cx="9" cy="9" r="3" fill="' + INK + '"/>';
+      var y0 = 40 - (lines.length - 1) * 6.5;
+      lines.forEach(function (ln, li) {
+        out += '<text x="55" y="' + (y0 + li * 13).toFixed(1) + '" text-anchor="middle" fill="#3A2A2E" ' +
+               'font-family="Golos Text, sans-serif" font-size="10.5" font-weight="600">' + esc(ln) + '</text>';
+      });
+      out += '</g>';
+    }
+    return out;
+  }
+
+  // Баглааг PNG болгоно (амжилтгүй бол null)
+  function makePng() {
+    return new Promise(function (resolve) {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="880" viewBox="0 0 400 440">' +
+                '<rect width="400" height="440" fill="#EFE4DA"/>' + scene(true) +
+                '<text x="14" y="428" font-family="sans-serif" font-size="11" font-weight="700" fill="#C9445A" letter-spacing="2">LA PARADISO</text></svg>';
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var c = document.createElement('canvas'); c.width = 800; c.height = 880;
+          var ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0, 800, 880);
+          resolve(c.toDataURL('image/png'));
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = function () { resolve(null); };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+
+  /* ---------- Дэлгэц шинэчлэх ---------- */
+  var stage = $('stage'), tray = $('tray');
+
+  function renderStage() { stage.innerHTML = scene(false); fresh = -1; }
+
+  function renderBar() {
+    var nF = flowerCount(), nX = stems.length - nF;
+    $('total').textContent = nF;
+    $('extra').textContent = nX ? ' · ' + nX + ' чимэглэл' : '';
+    $('next').disabled = nF === 0;
+    $('undo').disabled = history.length === 0;
+    $('tidy').disabled = stems.length < 2;
+    $('clear').disabled = stems.length === 0;
+    $('remove').hidden = sel < 0;
+  }
+
+  function tile(f, i, showRank) {
+    var c = counts()[f.id] || 0;
+    return '<button class="pick" type="button" data-id="' + f.id + '">' +
+           (showRank && i < 3 ? '<span class="hot">№' + (i + 1) + '</span>' : '') +
+           '<svg viewBox="0 0 42 42" aria-hidden="true">' + sprite(f) + '</svg>' +
+           '<span>' + f.name + '</span><span class="n">' + (c ? c + ' ш' : '&nbsp;') + '</span></button>';
+  }
+  function renderTray() {
+    var keep = tray.scrollLeft, html = '', nF = flowerCount(), nX = stems.length - nF;
+    if (tab === 'flowers') html = FLOWERS.map(function (f, i) { return tile(f, i, ranked); }).join('');
+    else if (tab === 'fillers') html = FILLERS.map(function (f, i) { return tile(f, i, false); }).join('');
+    else if (tab === 'paper' || tab === 'ribbon') {
+      var list = tab === 'paper' ? PAPERS : RIBBONS, cur = tab === 'paper' ? paperId : ribbonId;
+      html = list.map(function (o) {
+        return '<button class="swt" type="button" data-opt="' + o.id + '" aria-pressed="' + (o.id === cur) + '">' +
+               '<i style="background:' + o.fill + '"></i>' + o.name + '</button>';
+      }).join('');
+    } else {
+      html = '<div class="cardbox"><textarea id="msg" maxlength="' + MSG_MAX + '" aria-label="Мэндчилгээний үг" ' +
+             'placeholder="Картан дээр бичих үг. Жишээ: Төрсөн өдрийн мэнд хүргэе!">' + esc(message) + '</textarea>' +
+             '<div class="count" id="msgCount">' + message.length + ' / ' + MSG_MAX + '</div></div>';
+    }
+    tray.innerHTML = html;
+    tray.scrollLeft = keep;
+    if (tab === 'flowers' && nF >= MAX) disableTiles();
+    if (tab === 'fillers' && nX >= MAX_FILL) disableTiles();
+  }
+  function disableTiles() { [].forEach.call(tray.querySelectorAll('.pick'), function (b) { b.disabled = true; }); }
+
+  function renderAll() { renderStage(); renderBar(); if (tab !== 'card') renderTray(); saveDraft(); }
+
+  /* ---------- Тавиур ---------- */
+  [].forEach.call(document.querySelectorAll('.tab'), function (t) {
+    t.addEventListener('click', function () {
+      tab = t.getAttribute('data-tab');
+      [].forEach.call(document.querySelectorAll('.tab'), function (o) { o.setAttribute('aria-selected', o === t ? 'true' : 'false'); });
+      tray.scrollLeft = 0;
+      renderTray();
+    });
+  });
+  tray.addEventListener('click', function (e) {
+    var p = e.target.closest('.pick');
+    if (p && !p.disabled) {
+      remember();
+      var pos = slot(stems.length, MAX + MAX_FILL, 112);
+      stems.push({ id: p.getAttribute('data-id'), x: pos.x, y: pos.y });
+      fresh = stems.length - 1; sel = -1;
+      renderAll();
+      return;
+    }
+    var o = e.target.closest('.swt');
+    if (o) {
+      remember();
+      if (tab === 'paper') paperId = o.getAttribute('data-opt'); else ribbonId = o.getAttribute('data-opt');
+      renderAll();
+    }
+  });
+  tray.addEventListener('input', function (e) {
+    if (e.target.id !== 'msg') return;
+    message = e.target.value.slice(0, MSG_MAX);
+    $('msgCount').textContent = message.length + ' / ' + MSG_MAX;
+    renderStage(); saveDraft();
+  });
+
+  /* ---------- Тайзны товчнууд ---------- */
+  $('undo').addEventListener('click', undo);
+  $('tidy').addEventListener('click', function () { remember(); tidy(); sel = -1; renderAll(); });
+  $('clear').addEventListener('click', function () { remember(); stems = []; sel = -1; renderAll(); });
+  $('remove').addEventListener('click', function () {
+    if (sel < 0) return;
+    remember(); stems.splice(sel, 1); sel = -1; renderAll();
+  });
+
+  /* ---------- Чирэх ---------- */
+  var drag = null;
+  function toSvg(e) {
+    var pt = stage.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(stage.getScreenCTM().inverse());
+  }
+  stage.addEventListener('pointerdown', function (e) {
+    var g = e.target.closest('g.bloom');
+    if (!g) { if (sel >= 0) { sel = -1; renderStage(); renderBar(); } return; }
+    var i = Number(g.getAttribute('data-i')), p = toSvg(e);
+    drag = { i: i, g: g, px: p.x, py: p.y, ox: stems[i].x, oy: stems[i].y, moved: false, before: snap(),
+             line: stage.querySelector('line[data-s="' + i + '"]') };
+    try { g.setPointerCapture(e.pointerId); } catch (err) { /* дэмжихгүй хөтөч */ }
+  });
+  stage.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var p = toSvg(e), dx = p.x - drag.px, dy = p.y - drag.py;
+    if (!drag.moved && Math.sqrt(dx * dx + dy * dy) < 5) return;
+    drag.moved = true;
+    e.preventDefault();
+    var s = stems[drag.i];
+    s.x = clamp(drag.ox + dx, BOUNDS.x0, BOUNDS.x1);
+    s.y = clamp(drag.oy + dy, BOUNDS.y0, BOUNDS.y1);
+    drag.g.setAttribute('transform', bloomTransform(s));
+    if (drag.line) {
+      var en = stemEnd(s);
+      drag.line.setAttribute('x1', s.x.toFixed(1)); drag.line.setAttribute('y1', s.y.toFixed(1));
+      drag.line.setAttribute('x2', en.x.toFixed(1));
+    }
+  });
+  function endDrag() {
+    if (!drag) return;
+    if (drag.moved) { history.push(drag.before); if (history.length > 40) history.shift(); }
+    else sel = (sel === drag.i) ? -1 : drag.i;
+    drag = null;
+    renderStage(); renderBar(); saveDraft();
+  }
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  stage.addEventListener('keydown', function (e) {
+    var g = e.target.closest('g.bloom'); if (!g) return;
+    var i = Number(g.getAttribute('data-i')), s = stems[i], step = 6;
+    if (e.key === 'Enter' || e.key === ' ') sel = (sel === i) ? -1 : i;
+    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remember(); stems.splice(i, 1); sel = -1; renderAll(); return; }
+    else if (e.key === 'ArrowLeft')  { remember(); s.x = clamp(s.x - step, BOUNDS.x0, BOUNDS.x1); }
+    else if (e.key === 'ArrowRight') { remember(); s.x = clamp(s.x + step, BOUNDS.x0, BOUNDS.x1); }
+    else if (e.key === 'ArrowUp')    { remember(); s.y = clamp(s.y - step, BOUNDS.y0, BOUNDS.y1); }
+    else if (e.key === 'ArrowDown')  { remember(); s.y = clamp(s.y + step, BOUNDS.y0, BOUNDS.y1); }
+    else return;
+    e.preventDefault();
+    renderStage(); renderBar(); saveDraft();
+    var again = stage.querySelector('g.bloom[data-i="' + i + '"]'); if (again) again.focus();
+  });
+
+  /* ---------- Алхам солих ---------- */
+  function show(view) {
+    $('vBuild').hidden = view !== 'build';
+    $('vForm').hidden = view !== 'form';
+    $('vDone').hidden = view !== 'done';
+    $('step').textContent = view === 'build' ? '1 / 2 · Баглаагаа угсар' : view === 'form' ? '2 / 2 · Мэдээллээ бич' : 'Баярлалаа';
+    if (view !== 'build') (view === 'form' ? $('vForm') : $('vDone')).scrollTop = 0;
+  }
+  function summaryText() {
+    var m = counts();
+    var part = function (list) {
+      return list.filter(function (f) { return m[f.id]; }).map(function (f) { return f.name + ' ×' + m[f.id]; }).join(', ');
+    };
+    var t = '<b>' + flowerCount() + ' иш цэцэг</b>' + esc(part(FLOWERS));
+    var x = part(FILLERS);
+    if (x) t += '<br>Чимэглэл: ' + esc(x);
+    t += '<br>' + byId(PAPERS, paperId).name + ' цаас · ' + byId(RIBBONS, ribbonId).name + ' тууз';
+    if (message.trim()) t += '<br>Карт: “' + esc(message.trim()) + '”';
+    return t;
+  }
+  $('next').addEventListener('click', function () {
+    sel = -1; renderStage();
+    $('recapText').innerHTML = summaryText();
+    makePng().then(function (png) {
+      lastPng = png;
+      $('recapImg').hidden = !png;
+      if (png) $('recapImg').src = png;
+    });
+    buildTimes();
+    show('form');
+  });
+  $('back').addEventListener('click', function () { show('build'); });
+
+  /* ---------- Өдөр, цаг (Улаанбаатарын цагаар) ---------- */
+  function ubToday(offsetDays) {
+    return new Date(Date.now() + 8 * 3600e3 + (offsetDays || 0) * 86400e3).toISOString().slice(0, 10);
+  }
+  function slotMs(date, hour) {
+    var p = date.split('-').map(Number);
+    return Date.UTC(p[0], p[1] - 1, p[2], hour - 8, 0, 0);
+  }
+  function openSlots(date) {
+    var out = [], earliest = Date.now() + LEAD_HOURS * 3600e3;
+    for (var h = OPEN; h <= CLOSE; h++) if (slotMs(date, h) >= earliest) out.push(h);
+    return out;
+  }
+  function buildTimes() {
+    var dateEl = $('date'), timeEl = $('time');
+    dateEl.min = ubToday(0); dateEl.max = ubToday(60);
+    if (!dateEl.value || dateEl.value < dateEl.min) dateEl.value = openSlots(ubToday(0)).length ? ubToday(0) : ubToday(1);
+    var prev = timeEl.value, slots = openSlots(dateEl.value);
+    timeEl.innerHTML = slots.length
+      ? slots.map(function (h) { var v = (h < 10 ? '0' : '') + h + ':00'; return '<option value="' + v + '">' + v + '</option>'; }).join('')
+      : '<option value="">Энэ өдөр боломжгүй</option>';
+    if (prev && slots.some(function (h) { return (h < 10 ? '0' : '') + h + ':00' === prev; })) timeEl.value = prev;
+  }
+  $('date').addEventListener('change', buildTimes);
+
+  /* ---------- Маягт ---------- */
+  function setDelivery(on) {
+    delivery = on;
+    $('segPickup').setAttribute('aria-pressed', on ? 'false' : 'true');
+    $('segDelivery').setAttribute('aria-pressed', on ? 'true' : 'false');
+    $('addressBox').hidden = !on;
+  }
+  $('segPickup').addEventListener('click', function () { setDelivery(false); });
+  $('segDelivery').addEventListener('click', function () { setDelivery(true); });
+  $('gift').addEventListener('change', function () { $('giftBox').hidden = !$('gift').checked; });
+
+  function digits(v) { return String(v).replace(/\D/g, ''); }
+  function mark(field, msg) {
+    var box = document.querySelector('.f[data-f="' + field + '"]'); if (!box) return;
+    var old = box.querySelector('.err'); if (old) old.remove();
+    box.classList.toggle('bad', !!msg);
+    if (msg) { var p = document.createElement('div'); p.className = 'err'; p.textContent = msg; box.appendChild(p); }
+  }
+  function validate() {
+    var bad = null, check = function (field, ok, msg) { mark(field, ok ? '' : msg); if (!ok && !bad) bad = field; };
+    check('name', $('name').value.trim().length > 0, 'Нэрээ бичнэ үү.');
+    check('phone', digits($('phone').value).length === 8, 'Утасны дугаар 8 оронтой байх ёстой.');
+    check('address', !delivery || $('address').value.trim().length > 0, 'Хүргэх хаягаа бичнэ үү.');
+    check('date', !!$('date').value, 'Өдрөө сонгоно уу.');
+    check('time', !!$('time').value, 'Энэ өдөр боломжтой цаг алга. Өөр өдөр сонгоно уу.');
+    var rp = digits($('rphone').value);
+    check('rphone', !$('gift').checked || rp.length === 0 || rp.length === 8, 'Утасны дугаар 8 оронтой байх ёстой.');
+    if (bad) { var el = document.querySelector('.f[data-f="' + bad + '"]'); if (el) el.scrollIntoView({ block: 'center' }); }
+    return !bad;
+  }
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var errBox = $('formErr'); errBox.hidden = true;
+    if (!validate()) return;
+
+    var btn = $('send'); btn.disabled = true; btn.textContent = 'Илгээж байна…';
+    var m = counts(), fl = {}, fi = {};
+    FLOWERS.forEach(function (f) { if (m[f.id]) fl[f.id] = m[f.id]; });
+    FILLERS.forEach(function (f) { if (m[f.id]) fi[f.id] = m[f.id]; });
+    var gift = $('gift').checked;
+
+    (lastPng ? Promise.resolve(lastPng) : makePng()).then(function (png) {
+      lastPng = png;
+      return fetch('/api/orders', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          flowers: fl, fillers: fi, paper: paperId, ribbon: ribbonId, message: message.trim(),
+          name: $('name').value.trim(), phone: digits($('phone').value),
+          delivery: delivery, address: delivery ? $('address').value.trim() : '',
+          date: $('date').value, time: $('time').value,
+          recipientName: gift ? $('rname').value.trim() : '', recipientPhone: gift ? digits($('rphone').value) : '',
+          allowSwap: $('swap').checked, note: $('note').value.trim(),
+          website: $('website').value, image: png || undefined
+        })
+      });
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; });
+    }).then(function (r) {
+      if (!r.ok || !r.data.orderId) throw new Error(r.data.error || 'Захиалга илгээж чадсангүй. Дахин оролдоно уу.');
+      finish(r.data.orderId);
+    }).catch(function (err) {
+      errBox.textContent = /Failed to fetch|NetworkError|Load failed/i.test(err.message)
+        ? 'Интернэт холболтоо шалгаад дахин оролдоно уу.' : err.message;
+      errBox.hidden = false;
+    }).then(function () { btn.disabled = false; btn.textContent = 'Захиалга илгээх'; });
+  });
+
+  /* ---------- Дууссан ---------- */
+  function finish(orderId) {
+    $('oid').textContent = orderId;
+    var has = !!lastPng;
+    $('doneImg').hidden = !has; $('save').hidden = !has;
+    if (has) { $('doneImg').src = lastPng; $('save').href = lastPng; }
+    $('share').hidden = !(has && navigator.share && navigator.canShare);
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* алгасна */ }
+    show('done');
+  }
+  $('share').addEventListener('click', function () {
+    fetch(lastPng).then(function (r) { return r.blob(); }).then(function (blob) {
+      var file = new File([blob], 'la-paradiso-baglaa.png', { type: 'image/png' });
+      var data = { files: [file], title: 'Миний пиксел баглаа', text: 'La Paradiso дээр баглаагаа өөрөө угсарлаа' };
+      if (navigator.canShare(data)) return navigator.share(data);
+      return navigator.share({ title: data.title, text: data.text, url: location.href });
+    }).catch(function () { /* хэрэглэгч болиулсан */ });
+  });
+  $('again').addEventListener('click', function () {
+    stems = []; message = ''; history = []; sel = -1; lastPng = null;
+    starter(); renderAll(); renderTray(); show('build');
+  });
+
+  /* ---------- Эхлэл ---------- */
+  function starter() {
+    ['sarnai', 'sarnai', 'sarnai', 'romashka', 'romashka', 'navch'].forEach(function (id) { stems.push({ id: id, x: 200, y: 160 }); });
+    tidy();
+  }
+  if (!loadDraft() || stems.length === 0) { stems = []; starter(); }
+  setDelivery(false);
+  renderAll();
+  renderTray();
+
+  // Их зарагддаг цэцгийг эхэнд нь гаргана (сүүлийн 30 хоногийн хаалтаас)
+  fetch('/api/flowers/top').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (!d || !d.flowers || !d.flowers.length) return;
+    var rank = function (f) { var i = d.flowers.indexOf(f.key); return i < 0 ? 999 : i; };
+    if (!FLOWERS.some(function (f) { return rank(f) < 999; })) return;
+    FLOWERS.sort(function (a, b) { return rank(a) - rank(b); });
+    ranked = true;
+    if (tab === 'flowers') renderTray();
+  }).catch(function () { /* эрэмбэгүй ч ажиллана */ });
+})();
+</script>
+</body>
+</html>
