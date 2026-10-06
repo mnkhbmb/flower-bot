@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting } from './sheets.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -53,6 +53,12 @@ const commands = [
   new SlashCommandBuilder()
     .setName('tsalin')
     .setDescription('Энэ хугацааны цалингийн тооцоо харах')
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('hansh')
+    .setDescription('Юанийн ханш харах / тохируулах (бараа таталтыг төгрөг болгоход)')
+    .addNumberOption(o => o.setName('yuan').setDescription('1 юань = хэдэн төгрөг (ж: 495)')
+      .setMinValue(1).setMaxValue(10000).setRequired(false))
     .toJSON(),
   new SlashCommandBuilder()
     .setName('horogdol')
@@ -404,6 +410,27 @@ export async function startDiscord() {
       return;
     }
 
+    // /hansh — юанийн ханш
+    if (interaction.commandName === 'hansh') {
+      await interaction.deferReply();
+      try {
+        const value = interaction.options.getNumber('yuan');
+        if (value) {
+          await setSetting('yuan_hansh', value);
+          await interaction.editReply(`✅ Юанийн ханш: **1¥ = ${value.toLocaleString()}₮**. Одооноос юаниар ирсэн бараа таталт энэ ханшаар төгрөг болно.`);
+        } else {
+          const rate = await getYuanRate();
+          await interaction.editReply(rate > 0
+            ? `💱 Одоогийн ханш: **1¥ = ${rate.toLocaleString()}₮**. Өөрчлөх бол \`/hansh yuan:495\``
+            : '⚠️ Юанийн ханш тохируулаагүй байна. `/hansh yuan:495` гэж оруулна уу.');
+        }
+      } catch (err) {
+        console.error('hansh error:', err.message);
+        await interaction.editReply('⚠️ Ханш хадгалахад алдаа гарлаа.');
+      }
+      return;
+    }
+
     // /horogdol — хорогдлын цонх нээх
     if (interaction.commandName === 'horogdol') {
       await interaction.showModal(horogdolModal());
@@ -530,12 +557,20 @@ export async function startDiscord() {
 
     try {
       const invoice = await readInvoice(attachment);
-      await saveBaraa(invoice);
+      const money = await saveBaraa(invoice);
       await increaseAguurlah(invoice.baraa);
 
+      // Баримтын мөрүүдийг эх валютаар нь, нийт дүнг төгрөгөөр харуулна
+      const sign = money.currency === 'CNY' ? '¥' : '₮';
+      const unit = v => (money.currency === 'CNY' ? `¥${Number(v).toLocaleString()}` : `${Number(v).toLocaleString()}₮`);
       const itemList = invoice.baraa.slice(0, 10)
-        .map((b, i) => `${i + 1}. ${b.ner} — ${b.too}ш × ${Number(b.negj).toLocaleString()}₮`)
+        .map((b, i) => `${i + 1}. ${b.ner} — ${b.too}ш × ${unit(b.negj)}`)
         .join('\n');
+      const totalText = money.currency !== 'CNY'
+        ? `${money.total.toLocaleString()}₮`
+        : money.rate > 0
+          ? `**${money.total.toLocaleString()}₮**\n¥${money.original.toLocaleString()} × ${money.rate.toLocaleString()}`
+          : `¥${money.original.toLocaleString()}\n⚠️ Ханшгүй тул юаниар хадгаллаа. \`/hansh\` тохируулна уу.`;
       const more = invoice.baraa.length > 10 ? `\n... нийт ${invoice.baraa.length} төрөл` : '';
 
       await safeEdit({
@@ -547,7 +582,7 @@ export async function startDiscord() {
             .addFields(
               { name: '📅 Огноо', value: invoice.ogno || '—', inline: true },
               { name: '🏭 Нийлүүлэгч', value: invoice.nilluulegch || '—', inline: true },
-              { name: '💰 Нийт дүн', value: `${Number(invoice.niitDun).toLocaleString()}₮`, inline: true },
+              { name: `💰 Нийт дүн (${sign === '¥' ? 'юань → төгрөг' : 'төгрөг'})`, value: totalText, inline: true },
               { name: `📋 Бараа (${invoice.baraa.length} төрөл)`, value: itemList + more, inline: false },
             )
             .setTimestamp()

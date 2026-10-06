@@ -211,10 +211,70 @@ export async function getSalaryReport(from, to, exclude = []) {
 }
 
 // Бараа таталт хадгалах
+// --- Тохиргоо: "Тохиргоо" tab-д түлхүүр/утга хэлбэрээр (байхгүй бол үүсгэнэ) ---
+async function settingsSheet(d, create) {
+  let sheet = findSheet(d, 'Тохиргоо');
+  if (!sheet && create) {
+    sheet = await d.addSheet({ title: 'Тохиргоо', headerValues: ['Түлхүүр', 'Утга'] });
+  }
+  return sheet;
+}
+export async function getSetting(key) {
+  const d = await ensureLoaded();
+  const sheet = await settingsSheet(d, false);
+  if (!sheet) return null;
+  const rows = await sheet.getRows();
+  const row = rows.find(r => String(r.get('Түлхүүр') || '').trim() === key);
+  return row ? String(row.get('Утга') ?? '').trim() : null;
+}
+export async function setSetting(key, value) {
+  const d = await ensureLoaded();
+  const sheet = await settingsSheet(d, true);
+  const rows = await sheet.getRows();
+  const row = rows.find(r => String(r.get('Түлхүүр') || '').trim() === key);
+  if (row) { row.set('Утга', value); await row.save(); }
+  else await sheet.addRow({ 'Түлхүүр': key, 'Утга': value });
+}
+
+// Юанийн ханш (1 юань = хэдэн төгрөг). Тохируулаагүй бол 0.
+export async function getYuanRate() {
+  const fromSheet = Number(String(await getSetting('yuan_hansh') ?? '').replace(/[^\d.]/g, ''));
+  return fromSheet > 0 ? fromSheet : (Number(process.env.CNY_RATE) || 0);
+}
+
+// Tab-д дутуу баганыг толгойн мөрийн төгсгөлд нэмнэ
+async function ensureColumns(sheet, names) {
+  await sheet.loadHeaderRow();
+  const missing = names.filter(n => !sheet.headerValues.includes(n));
+  if (!missing.length) return;
+  const next = [...sheet.headerValues, ...missing];
+  if (sheet.columnCount < next.length) {
+    await sheet.resize({ rowCount: sheet.rowCount, columnCount: next.length });
+  }
+  await sheet.setHeaderRow(next);
+}
+
+// Бараа таталт хадгалах. Юаниар ирсэн баримтыг ханшаар төгрөг болгож бичнэ.
+// Буцаах утга: { currency, rate, original, total } — Discord мэдэгдэлд хэрэглэнэ.
 export async function saveBaraa(invoice) {
   const d = await ensureLoaded();
   const sheet = d.sheetsByTitle['Бараа таталт'];
-  if (!sheet) return;
+  const num = v => Number(String(v ?? '').replace(/[^\d.-]/g, '')) || 0;
+
+  const currency = String(invoice.valyut || 'MNT').toUpperCase() === 'CNY' ? 'CNY' : 'MNT';
+  const rate = currency === 'CNY' ? await getYuanRate() : 1;
+  const convert = currency === 'CNY' && rate > 0;
+  const toMnt = v => (convert ? Math.round(num(v) * rate) : num(v));
+
+  const original = num(invoice.niitDun) || invoice.baraa.reduce((s, i) => s + num(i.niit), 0);
+  const info = { currency, rate: convert ? rate : 0, original, total: toMnt(original) };
+  if (!sheet) return info;
+
+  try {
+    await ensureColumns(sheet, ['Валют', 'Ханш', 'Юань дүн']);
+  } catch (err) {
+    console.error('Бараа таталт багана нэмэх алдаа:', err.message);
+  }
 
   // Бүх мөрийг нэг API дуудлагаар нэмнэ (мөр бүрд тус тусад нь бичвэл 429 quota хэтэрдэг)
   await sheet.addRows(invoice.baraa.map(item => ({
@@ -223,9 +283,13 @@ export async function saveBaraa(invoice) {
     'Нийлүүлэгч':  invoice.nilluulegch || '',
     'Бараа нэр':    item.ner || '',
     'Тоо':          item.too || '',
-    'Нэгж үнэ':    item.negj || '',
-    'Нийт дүн':    item.niit || '',
+    'Нэгж үнэ':    item.negj === '' || item.negj == null ? '' : toMnt(item.negj),
+    'Нийт дүн':    item.niit === '' || item.niit == null ? '' : toMnt(item.niit),
+    'Валют':        convert ? 'MNT' : currency,     // хөрвөөгүй үлдсэн бол CNY гэж тэмдэглэнэ
+    'Ханш':         convert ? rate : '',
+    'Юань дүн':     currency === 'CNY' ? num(item.niit) : '',
   })));
+  return info;
 }
 
 // Tab-ыг нэрээр нь (том/жижиг үсэг үл хамааран) олох
