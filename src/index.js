@@ -22,6 +22,7 @@ app.get('/', (req, res) => res.send('🌸 Flower bot ажиллаж байна')
 
 // --- Пиксел баглааны сайт ---
 app.get('/baglaa', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'baglaa.html')));
+app.get('/test', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'test.html')));
 app.get('/trivia', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'trivia.html')));
 app.get('/trivia.json', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'trivia.json'), { maxAge: '10m' }));
 app.get('/logo.jpg', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'logo.jpg'), { maxAge: '7d' }));

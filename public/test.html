@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Та ямар цэцэг вэ? — La Paradiso</title>
+<meta name="description" content="7 асуултад хариулаад өөрийн зан чанарт тохирох цэцгээ олоорой.">
+<meta name="theme-color" content="#FF5757">
+<meta property="og:title" content="Та ямар цэцэг вэ? — La Paradiso">
+<meta property="og:description" content="7 асуултад хариулаад өөрийн зан чанарт тохирох цэцгээ олоорой.">
+<meta property="og:image" content="https://flower-bot-production-e2f5.up.railway.app/logo.jpg">
+<link rel="icon" href="/logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=League+Spartan:wght@800&family=Montserrat:wght@700;800&display=swap">
+<style>
+  /* Layout: нэг багана — эхлэл, асуултууд, үр дүн ээлжлэн солигдоно */
+  :root {
+    --bg: #FDF0F2; --panel: #FFFFFF; --ink: #2B1A1D; --muted: #7A5F65; --line: #2B1A1D;
+    --accent: #E23B41; --accent-ink: #FFFFFF; --soft: #FFE1E4; --brand: #FF5757;
+    --table: #FBD5DF; --table-dot: #FFFFFF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171114; --panel: #221A1E; --ink: #F5EAED; --muted: #AB959C; --line: #534147;
+      --accent: #FF6B6B; --accent-ink: #2A1016; --soft: #3B2229; --brand: #FF6B6B;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink);
+         font-family: "Golos Text", system-ui, sans-serif; font-size: 15px; line-height: 1.5;
+         -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .app { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+         padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
+         border-bottom: 2px solid var(--line); background: var(--panel); }
+  .brand { display: flex; align-items: center; gap: 5px; white-space: nowrap; text-decoration: none;
+           font-family: "League Spartan", "Montserrat", system-ui, sans-serif; font-weight: 800;
+           font-size: 19px; line-height: 1; letter-spacing: -.01em; color: var(--brand); }
+  .brand svg { width: 20px; height: 15px; flex: none; }
+  .toplink { font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+
+  main { flex: 1; padding: 18px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  h1 { font-family: "Montserrat", system-ui, sans-serif; font-weight: 800; font-size: 28px; line-height: 1.15;
+       margin: 0 0 8px; text-wrap: balance; }
+  h2 { font-family: "Montserrat", system-ui, sans-serif; font-weight: 700; font-size: 20px; line-height: 1.3;
+       margin: 0 0 14px; text-wrap: balance; }
+  .lede { color: var(--muted); margin: 0 0 16px; max-width: 40ch; }
+
+  .plate { background: radial-gradient(var(--table-dot) 20%, transparent 22%) 0 0 / 26px 26px var(--table);
+           border: 2px solid var(--line); box-shadow: 4px 4px 0 var(--line); }
+  .parade { display: flex; justify-content: space-around; align-items: flex-end; padding: 18px 8px 0; margin-bottom: 18px; }
+  .parade svg { width: 19%; max-width: 78px; height: auto; display: block; }
+
+  .bar { height: 12px; border: 2px solid var(--line); background: var(--panel); margin-bottom: 6px; }
+  .bar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+  .count { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted);
+           margin-bottom: 16px; font-variant-numeric: tabular-nums; }
+  .backq { background: none; border: 0; padding: 4px 0; color: var(--accent); font-weight: 600; cursor: pointer; }
+  .backq:disabled { visibility: hidden; }
+
+  .opts { display: grid; gap: 10px; }
+  .opt { width: 100%; text-align: left; padding: 14px; min-height: 54px; cursor: pointer; font-weight: 500;
+         background: var(--panel); border: 2px solid var(--line); box-shadow: 3px 3px 0 var(--line); }
+  .opt:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); background: var(--soft); }
+
+  .btn { padding: 13px 18px; font-weight: 700; cursor: pointer; border: 2px solid var(--line);
+         background: var(--panel); color: var(--ink); box-shadow: 3px 3px 0 var(--line);
+         text-decoration: none; display: block; text-align: center; width: 100%; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .stack { display: grid; gap: 10px; margin-top: 18px; }
+
+  .result { text-align: center; }
+  .eyebrow { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 2px; }
+  .portrait { width: 62%; max-width: 230px; margin: 12px auto 14px; padding: 16px 16px 0; }
+  .portrait svg { width: 100%; height: auto; display: block; }
+  .tag { font-weight: 700; color: var(--accent); margin: 0 0 8px; }
+  .desc { margin: 0 auto 14px; max-width: 38ch; text-align: left; }
+  .traits { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
+  .traits li { padding: 5px 10px; border: 2px solid var(--line); background: var(--panel); font-size: 13px; font-weight: 600; }
+  .match { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px;
+           background: var(--panel); border: 2px solid var(--line); }
+  .match svg { width: 44px; height: 44px; flex: none; }
+  .match b { display: block; }
+  .match span { font-size: 13px; color: var(--muted); }
+  .fine { font-size: 13px; color: var(--muted); margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" href="/baglaa" aria-label="La Paradiso">LA<svg viewBox="0 0 8 6" aria-hidden="true" shape-rendering="crispEdges"><rect x="0" y="1" width="2" height="3" fill="#2B1A1D"/><rect x="2" y="0" width="4" height="1" fill="#E23B41"/><rect x="2" y="1" width="5" height="3" fill="#E23B41"/><rect x="7" y="2" width="1" height="2" fill="#E23B41"/><rect x="3" y="4" width="4" height="1" fill="#E23B41"/><rect x="3" y="2" width="1" height="1" fill="#2B1A1D"/><rect x="5" y="1" width="1" height="1" fill="#2B1A1D"/><rect x="6" y="3" width="1" height="1" fill="#2B1A1D"/><rect x="2" y="5" width="1" height="1" fill="#2B1A1D"/><rect x="5" y="5" width="1" height="1" fill="#2B1A1D"/></svg>PARADISO.</a>
+    <a class="toplink" href="/baglaa">Баглаа угсрах →</a>
+  </header>
+
+  <!-- Эхлэл -->
+  <main id="vIntro">
+    <div class="plate parade" id="parade" aria-hidden="true"></div>
+    <h1>Та ямар цэцэг вэ?</h1>
+    <p class="lede">Хүн бүрд өөрт нь тохирох цэцэг бий. 7 богино асуултад хариулаад өөрийнхөө цэцгийг олоорой. Буруу хариулт гэж байхгүй.</p>
+    <button class="btn primary" id="startBtn" type="button">Эхлэх</button>
+  </main>
+
+  <!-- Асуулт -->
+  <main id="vQuiz" hidden aria-live="polite">
+    <div class="bar"><i id="barFill" style="width:0"></i></div>
+    <div class="count"><button class="backq" id="backq" type="button">← Өмнөх</button><span id="count"></span></div>
+    <h2 id="q"></h2>
+    <div class="opts" id="opts"></div>
+  </main>
+
+  <!-- Үр дүн -->
+  <main id="vResult" class="result" hidden>
+    <p class="eyebrow">Таны цэцэг</p>
+    <h1 id="rName"></h1>
+    <div class="plate portrait" id="portrait"></div>
+    <p class="tag" id="rTag"></p>
+    <p class="desc" id="rDesc"></p>
+    <ul class="traits" id="rTraits"></ul>
+    <div class="match" id="rMatch"></div>
+    <div class="stack">
+      <button class="btn primary" id="order" type="button"></button>
+      <button class="btn" id="share" type="button">Үр дүнгээ хуваалцах</button>
+      <a class="btn" id="save" download="la-paradiso-minii-tsetseg.png" hidden>Зураг хадгалах</a>
+      <a class="btn" href="/trivia">Цэцгийн асуулт тоглох</a>
+      <button class="btn" id="again" type="button">Дахин бөглөх</button>
+    </div>
+    <p class="fine">Энэ бол зугаа цэнгэлийн тест. Жинхэнэ зан чанарыг тань та өөрөө л мэднэ.</p>
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* Пиксел цэцгүүд — id, хэлбэр, өнгө нь public/baglaa.html-тэй таарах ёстой */
+  var SHAPES = {
+    round: ['..PPP..', '.PPPPP.', 'PPPCPPP', 'PPCCCPP', 'PPPCPPP', '.PPPPP.', '..PPP..'],
+    ray:   ['...P...', '.P.P.P.', '..PCP..', 'PPCCCPP', '..PCP..', '.P.P.P.', '...P...'],
+    bell:  ['.P...P.', '.PP.PP.', '..PPP..', '.PPCPP.', '.PPPPP.', '..PPP..', '...P...'],
+    spray: ['.P.P.P.', 'P.PCP.P', '.PPPPP.', 'P.PCP.P', '.P.P.P.', '..PPP..', '...P...']
+  };
+  var STEM = ['...G...', '..LG...', '...GL..', '...G...', '...G...'];
+
+  var TYPES = {
+    sarnai: { name: 'Сарнай', shape: 'round', P: '#E0455F', C: '#A32442', pair: 'lili',
+      tag: 'Хайр, хүсэл тэмүүлэлтэй нэгэн',
+      desc: 'Та аливаад зүрх сэтгэлээ бүрэн зориулдаг. Хайртай хүмүүсээ онцгой гэдгийг нь мэдрүүлж чаддаг, үг, үйлдэл тань үргэлж дулаан.',
+      traits: ['Романтик', 'Зоригтой', 'Сэтгэлтэй'] },
+    narants: { name: 'Наранцэцэг', shape: 'ray', P: '#F5C32C', C: '#7A4A12', pair: 'romashka',
+      tag: 'Гэрэл гэгээ түгээгч',
+      desc: 'Та хаана ч очсон уур амьсгалыг гэрэлтүүлдэг. Хэцүү үед ч сайн талыг нь олж харж, эргэн тойрныхоо хүмүүст эрч хүч өгдөг.',
+      traits: ['Өөдрөг', 'Эрч хүчтэй', 'Нээлттэй'] },
+    romashka: { name: 'Ромашка', shape: 'ray', P: '#FBF7F0', C: '#F2B705', pair: 'udval',
+      tag: 'Энгийн, чин сэтгэлийн эзэн',
+      desc: 'Та жижиг зүйлээс аз жаргал олдог. Хуурамч зүйлд дургүй, хүмүүс тантай байхдаа өөрөөрөө байж чаддаг.',
+      traits: ['Чин сэтгэлтэй', 'Даруу', 'Найрсаг'] },
+    tseene: { name: 'Цээнэ', shape: 'round', P: '#F392B8', C: '#CE5B8B', pair: 'sarnai',
+      tag: 'Өгөөмөр, тансаг сэтгэлтэн',
+      desc: 'Та гоо сайхныг мэдэрдэг, бусдад өгөхдөө харамгүй. Таны хийсэн бүхэнд нарийн мэдрэмж, халамж шингэсэн байдаг.',
+      traits: ['Өгөөмөр', 'Дэгжин', 'Халамжтай'] },
+    lili: { name: 'Лили', shape: 'bell', P: '#FBE7F0', C: '#E58FB4', pair: 'statis',
+      tag: 'Тайван, дэгжин нэгэн',
+      desc: 'Та яаралгүй, бодолтой. Шуугианаас илүү нам гүмийг эрхэмлэдэг, таны тайван байдал бусдыг ч тайвшруулдаг.',
+      traits: ['Тайван', 'Ухаалаг', 'Эмх цэгцтэй'] },
+    udval: { name: 'Удвал', shape: 'bell', P: '#9A6BD8', C: '#5F349A', pair: 'romashka',
+      tag: 'Тэсвэртэй, үнэнч анд',
+      desc: 'Та хэлсэндээ хүрдэг, эхэлсэн ажлаа дуусгадаг. Намрын хүйтэнд ч дэлгэрдэг удвал шиг хэцүү үед л хамгийн хүчтэй байдаг.',
+      traits: ['Найдвартай', 'Тэвчээртэй', 'Үнэнч'] },
+    gerbera: { name: 'Гербера', shape: 'ray', P: '#FF7A3C', C: '#8E3C18', pair: 'narants',
+      tag: 'Хөгжилтэй, нийтэч сэтгэл',
+      desc: 'Тантай хамт байхад уйдах зав гардаггүй. Шинэ хүн, шинэ газар, шинэ санаанд үргэлж нээлттэй, инээд тань халдварладаг.',
+      traits: ['Хөгжилтэй', 'Нийтэч', 'Сониуч'] },
+    statis: { name: 'Статис', shape: 'spray', P: '#6E8CE0', C: '#3B56A3', pair: 'lili',
+      tag: 'Мөрөөдөмтгий уран бүтээлч',
+      desc: 'Та ертөнцийг өөрийнхөөрөө хардаг. Бусдын анзаардаггүй зүйлээс санаа авч, дурсамж, мэдрэмжээ удаан хадгалдаг.',
+      traits: ['Бүтээлч', 'Мэдрэмтгий', 'Өвөрмөц'] }
+  };
+
+  /* Хариулт бүр хоёр цэцэгт оноо өгнө: эхнийх нь 2, дараагийнх нь 1 */
+  var QUESTIONS = [
+    { q: 'Амралтын өдрийн өглөө та юу хийх вэ?', o: [
+      ['Найзуудтайгаа уулзахаар гарна', 'gerbera', 'narants'],
+      ['Гэртээ ном, кофетойгоо тухална', 'lili', 'romashka'],
+      ['Хайртай хүндээ өглөөний цай бэлдэнэ', 'sarnai', 'tseene'],
+      ['Эрт босоод ууланд гарна', 'narants', 'udval']] },
+    { q: 'Найзууд тань таныг юу гэж тодорхойлдог вэ?', o: [
+      ['Үргэлж инээлгэдэг', 'gerbera', 'romashka'],
+      ['Найдвартай, хэлсэндээ хүрдэг', 'udval', 'romashka'],
+      ['Мөрөөдөмтгий, уран бүтээлч', 'statis', 'lili'],
+      ['Халамжтай, өгөөмөр', 'tseene', 'sarnai']] },
+    { q: 'Бэлэг сонгохдоо та юуг чухалчилдаг вэ?', o: [
+      ['Гараар хийсэн, утга учиртай байх', 'romashka', 'statis'],
+      ['Тансаг, гоё боодолтой байх', 'tseene', 'lili'],
+      ['Гэнэтийн бэлэг болж баярлуулах', 'sarnai', 'gerbera'],
+      ['Хэрэгтэй, удаан эдлэх зүйл байх', 'udval', 'narants']] },
+    { q: 'Танд хамгийн ойр улирал аль нь вэ?', o: [
+      ['Хавар', 'romashka', 'tseene'],
+      ['Зун', 'narants', 'gerbera'],
+      ['Намар', 'udval', 'statis'],
+      ['Өвөл', 'lili', 'udval']] },
+    { q: 'Хэцүү үед та юу хийдэг вэ?', o: [
+      ['Бүх зүйл сайхан болно гэж итгэнэ', 'narants', 'romashka'],
+      ['Тайван суугаад сайтар бодно', 'lili', 'udval'],
+      ['Ойр дотны хүнтэйгээ ярилцана', 'tseene', 'sarnai'],
+      ['Зурна, бичнэ, хөгжим сонсоно', 'statis', 'gerbera']] },
+    { q: 'Мөрөөдлийн аялал тань аль нь вэ?', o: [
+      ['Романтик хуучин хотоор алхах', 'sarnai', 'tseene'],
+      ['Далайн эрэг, халуун нар', 'narants', 'gerbera'],
+      ['Уулын нам гүм байшин', 'lili', 'statis'],
+      ['Хөдөө тал, гэр бүлээрээ', 'romashka', 'udval']] },
+    { q: 'Аль өнгө танд хамгийн ойр вэ?', o: [
+      ['Улаан', 'sarnai', 'udval'],
+      ['Шар, улбар шар', 'gerbera', 'narants'],
+      ['Ягаан', 'tseene', 'romashka'],
+      ['Хөх, нил ягаан', 'statis', 'udval']] }
+  ];
+
+  var GREEN = '#4A7C3F', LEAF = '#6DA95D';
+  function $(id) { return document.getElementById(id); }
+
+  // Толгой (7×7) + иш (7×5) бүхий пиксел цэцэг
+  function flowerSvg(t, withStem) {
+    var rows = SHAPES[t.shape].concat(withStem ? STEM : []), out = '';
+    for (var y = 0; y < rows.length; y++) for (var x = 0; x < rows[y].length; x++) {
+      var ch = rows[y].charAt(x);
+      if (ch === '.') continue;
+      var fill = ch === 'P' ? t.P : ch === 'C' ? t.C : ch === 'G' ? GREEN : LEAF;
+      out += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + fill + '"/>';
+    }
+    return '<svg viewBox="0 0 7 ' + rows.length + '" shape-rendering="crispEdges" aria-hidden="true">' + out + '</svg>';
+  }
+
+  var answers = [], idx = 0, resultId = null, lastPng = null;
+
+  function show(view) {
+    $('vIntro').hidden = view !== 'intro';
+    $('vQuiz').hidden = view !== 'quiz';
+    $('vResult').hidden = view !== 'result';
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- Асуулт ---------- */
+  function showQuestion() {
+    var item = QUESTIONS[idx];
+    $('barFill').style.width = (idx / QUESTIONS.length * 100) + '%';
+    $('count').textContent = (idx + 1) + ' / ' + QUESTIONS.length;
+    $('backq').disabled = idx === 0;
+    $('q').textContent = item.q;
+    $('opts').innerHTML = item.o.map(function (o, i) {
+      return '<button class="opt" type="button" data-i="' + i + '">' + o[0] + '</button>';
+    }).join('');
+  }
+  $('opts').addEventListener('click', function (e) {
+    var b = e.target.closest('.opt'); if (!b) return;
+    answers[idx] = Number(b.getAttribute('data-i'));
+    idx++;
+    if (idx < QUESTIONS.length) showQuestion(); else finish();
+  });
+  $('backq').addEventListener('click', function () { if (idx > 0) { idx--; showQuestion(); } });
+
+  /* ---------- Үр дүн ---------- */
+  function score() {
+    var pts = {}, lastTop = {};
+    answers.forEach(function (a, qi) {
+      var o = QUESTIONS[qi].o[a];
+      pts[o[1]] = (pts[o[1]] || 0) + 2; lastTop[o[1]] = qi;
+      pts[o[2]] = (pts[o[2]] || 0) + 1;
+    });
+    // Тэнцвэл хамгийн сүүлд гол хариултаар сонгогдсон нь түрүүлнэ
+    return Object.keys(pts).sort(function (a, b) {
+      return pts[b] - pts[a] || (lastTop[b] == null ? -1 : lastTop[b]) - (lastTop[a] == null ? -1 : lastTop[a]);
+    })[0];
+  }
+  function finish() {
+    resultId = score();
+    var t = TYPES[resultId], p = TYPES[t.pair];
+    $('rName').textContent = t.name;
+    $('portrait').innerHTML = flowerSvg(t, true);
+    $('rTag').textContent = t.tag;
+    $('rDesc').textContent = t.desc;
+    $('rTraits').innerHTML = t.traits.map(function (x) { return '<li>' + x + '</li>'; }).join('');
+    $('rMatch').innerHTML = flowerSvg(p, false) + '<div><span>Тантай хамгийн сайн зохицох цэцэг</span><b>' + p.name + '</b></div>';
+    $('order').textContent = t.name + 'тай баглаа угсрах';
+    show('result');
+    lastPng = null; $('save').hidden = true;
+    makePng(t).then(function (png) { lastPng = png; if (png) { $('save').href = png; $('save').hidden = false; } });
+  }
+
+  function makePng(t) {
+    return new Promise(function (resolve) {
+      var rows = SHAPES[t.shape].concat(STEM), c = 22, ox = 123, oy = 120, px = '';
+      for (var y = 0; y < rows.length; y++) for (var x = 0; x < rows[y].length; x++) {
+        var ch = rows[y].charAt(x);
+        if (ch === '.') continue;
+        var fill = ch === 'P' ? t.P : ch === 'C' ? t.C : ch === 'G' ? GREEN : LEAF;
+        px += '<rect x="' + (ox + x * c) + '" y="' + (oy + y * c) + '" width="' + c + '" height="' + c + '" fill="' + fill + '"/>';
+      }
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 400 500">' +
+        '<defs><pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">' +
+        '<rect width="22" height="22" fill="#FBD5DF"/><circle cx="11" cy="11" r="3.4" fill="#FFFFFF"/></pattern></defs>' +
+        '<rect width="400" height="500" fill="url(#dots)"/>' +
+        '<rect x="40" y="26" width="320" height="74" fill="#FFFFFF" stroke="#2B1A1D" stroke-width="3"/>' +
+        '<text x="200" y="52" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#7A5F65">Миний цэцэг</text>' +
+        '<text x="200" y="84" text-anchor="middle" font-family="sans-serif" font-size="28" font-weight="700" fill="#E23B41">' + t.name + '</text>' +
+        px +
+        '<rect x="40" y="402" width="320" height="62" fill="#FFFFFF" stroke="#2B1A1D" stroke-width="3"/>' +
+        '<text x="200" y="428" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="700" fill="#2B1A1D">' + t.tag + '</text>' +
+        '<text x="200" y="451" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#E23B41" letter-spacing="1.5">LA PARADISO. · Та ямар цэцэг вэ?</text>' +
+        '</svg>';
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var cv = document.createElement('canvas'); cv.width = 800; cv.height = 1000;
+          var ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0, 800, 1000);
+          resolve(cv.toDataURL('image/png'));
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = function () { resolve(null); };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+
+  // Өөрийн цэцгээр голлосон баглааг угсрагчийн ноорог болгож дамжуулна
+  $('order').addEventListener('click', function () {
+    var t = TYPES[resultId];
+    var ids = [resultId, resultId, resultId, resultId, resultId, t.pair, t.pair, 'jijig', 'navch'];
+    var n = ids.length, spread = Math.min(112, 30 + 22 * Math.sqrt(n));
+    var clampN = function (v, a, b) { return v < a ? a : v > b ? b : v; };
+    var stems = ids.map(function (id, i) {
+      var r = spread * Math.sqrt((i + 0.5) / n), a = i * 2.39996;
+      return { id: id, x: clampN(200 + r * Math.cos(a) * 1.2, 70, 330), y: clampN(160 + r * Math.sin(a) * 0.74, 44, 236) };
+    });
+    try { localStorage.setItem('lp_baglaa_v1', JSON.stringify({ stems: stems, paperId: 'kraft', ribbonId: 'red', message: '' })); }
+    catch (e) { /* хадгалж чадахгүй бол хоосон угсрагч нээгдэнэ */ }
+    location.href = '/baglaa';
+  });
+
+  $('share').addEventListener('click', function () {
+    var t = TYPES[resultId];
+    var text = 'Би бол ' + t.name + ' — ' + t.tag.toLowerCase() + '. Та ямар цэцэг вэ?';
+    var url = location.origin + '/test';
+    var copy = function () {
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(text + ' ' + url).then(function () {
+        $('share').textContent = 'Холбоос хуулагдлаа';
+        setTimeout(function () { $('share').textContent = 'Үр дүнгээ хуваалцах'; }, 2000);
+      }, function () {});
+    };
+    if (!navigator.share) return copy();
+    var go = function (data) { return navigator.share(data).catch(function () { /* хэрэглэгч болиулсан */ }); };
+    if (lastPng && navigator.canShare) {
+      fetch(lastPng).then(function (r) { return r.blob(); }).then(function (blob) {
+        var data = { files: [new File([blob], 'la-paradiso-minii-tsetseg.png', { type: 'image/png' })], text: text + ' ' + url };
+        return navigator.canShare(data) ? go(data) : go({ text: text, url: url });
+      }).catch(function () { go({ text: text, url: url }); });
+    } else go({ text: text, url: url });
+  });
+
+  function begin() { answers = []; idx = 0; resultId = null; show('quiz'); showQuestion(); }
+  $('startBtn').addEventListener('click', begin);
+  $('again').addEventListener('click', begin);
+
+  // Эхлэлийн дэлгэц: таван цэцгийн жагсаал
+  $('parade').innerHTML = ['romashka', 'sarnai', 'narants', 'udval', 'tseene'].map(function (id) { return flowerSvg(TYPES[id], true); }).join('');
+})();
+</script>
+</body>
+</html>
