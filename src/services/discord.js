@@ -540,12 +540,13 @@ export async function startDiscord() {
     if (message.channelId !== process.env.DISCORD_BARAA_CHANNEL_ID) return;
     if (message.attachments.size === 0) return;
 
-    const attachment = message.attachments.first();
-    const isImage = attachment.contentType?.startsWith('image/');
-    const isPdf   = attachment.contentType?.includes('pdf');
-    if (!isImage && !isPdf) return;
+    // Нэг мессежийн бүх зураг/PDF-ийг нэг баримтын хуудсууд гэж үзнэ
+    const pages = [...message.attachments.values()].filter(a =>
+      a.contentType?.startsWith('image/') || a.contentType?.includes('pdf') ||
+      /\.(png|jpe?g|webp|gif|pdf)$/i.test(a.name || ''));
+    if (pages.length === 0) return;
 
-    const processing = await message.reply('⏳ Баримт уншиж байна...');
+    const processing = await message.reply(pages.length > 1 ? `⏳ ${pages.length} хуудас баримт уншиж байна...` : '⏳ Баримт уншиж байна...');
     // "⏳" мессеж устгагдсан байвал edit оронд шинэ мессеж илгээнэ (10008-аас сэргийлнэ)
     const safeEdit = async (payload) => {
       try {
@@ -556,7 +557,7 @@ export async function startDiscord() {
     };
 
     try {
-      const invoice = await readInvoice(attachment);
+      const invoice = await readInvoice(pages);
       const money = await saveBaraa(invoice);
       await increaseAguurlah(invoice.baraa);
 

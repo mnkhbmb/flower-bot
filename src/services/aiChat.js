@@ -2,6 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { CATALOG, PAYMENT_INFO, BOUQUET_ALBUM_URL, SHOW_PRICES, SHOP_INFO } from '../config/catalog.js';
 import { getFlowerTypes } from './sheets.js';
+import { sniffType } from './vision.js';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -78,9 +79,10 @@ export async function askAI(history, userText) {
 // Зургаас барагцаа үнэ хэлэх
 export async function priceFromImage(imageUrl) {
   const resp = await fetch(imageUrl);
-  const buffer = await resp.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString('base64');
-  const mediaType = resp.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
+  const buf = Buffer.from(await resp.arrayBuffer());
+  const base64 = buf.toString('base64');
+  // Толгойн мэдээлэл буруу байж болох тул файлын жинхэнэ төрлийг байтаас нь таана
+  const mediaType = sniffType(buf) || resp.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
 
   // Үнэ харуулах горимд барагцаа үнэ хэлнэ, эс бөгөөс зөвхөн төрлийг тодорхойлно
   const prompt = SHOW_PRICES
