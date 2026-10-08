@@ -630,15 +630,25 @@ export async function notifyNewOrder(order) {
 // Пиксел баглааны сайтаас ирсэн захиалга — харилцагчийн угсарсан зурагтай хамт
 export async function notifyWebOrder(order, d, image) {
   const channel = await client.channels.fetch(process.env.DISCORD_ORDER_CHANNEL_ID);
+  const ready = d.kind === 'ready';
   const embed = new EmbedBuilder()
-    .setColor(0xC9445A)
-    .setTitle(`🎨 Пиксел баглааны захиалга ${order.orderId}`)
-    .setDescription(`**${order.name}** · ${order.phone}`)
-    .addFields(
+    .setColor(ready ? 0xE23B41 : 0xC9445A)
+    .setTitle(`${ready ? '💐 Бэлэн загварын захиалга' : '🎨 Пиксел баглааны захиалга'} ${order.orderId}`)
+    .setDescription(`**${order.name}** · ${order.phone}`);
+
+  if (ready) {
+    embed.addFields({ name: '💐 Баглаа', value: d.product, inline: false });
+  } else {
+    embed.addFields(
       { name: `🌸 Цэцэг (${d.stems} иш)`, value: d.flowers || '—', inline: false },
       { name: '🌿 Чимэглэл', value: d.fillers || 'Байхгүй', inline: true },
       { name: '📄 Цаас', value: d.paper, inline: true },
       { name: '🎀 Тууз', value: d.ribbon, inline: true },
+    );
+  }
+
+  embed
+    .addFields(
       { name: '🕙 Хэзээ', value: d.when, inline: true },
       { name: '🚚 Хүлээн авах', value: order.delivery ? `Хүргэлт: ${order.address}` : 'Очиж авна', inline: true },
       { name: '🔁 Солих', value: d.allowSwap ? 'Зөвшөөрсөн' : '**Солихгүй**', inline: true },
@@ -656,6 +666,8 @@ export async function notifyWebOrder(order, d, image) {
   if (image) {
     embed.setImage('attachment://baglaa.png');
     payload.files = [new AttachmentBuilder(image, { name: 'baglaa.png' })];
+  } else if (d.imageUrl) {
+    embed.setImage(d.imageUrl);      // бэлэн загварын зураг сайтаас
   }
   await channel.send(payload);
 }

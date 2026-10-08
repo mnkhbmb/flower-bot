@@ -1,7 +1,23 @@
-// Пиксел баглааны сайтаас ирэх захиалга: шалгах → Sheets → Discord
+// Сайтаас ирэх захиалга (пиксел баглаа эсвэл бэлэн загвар): шалгах → Sheets → Discord
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { addOrder } from '../services/sheets.js';
 import { notifyWebOrder } from '../services/discord.js';
 import { PIXEL, LIMITS } from '../config/pixelCatalog.js';
+
+const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'public');
+const SITE_URL = process.env.PUBLIC_URL || 'https://flower-bot-production-e2f5.up.railway.app';
+
+// Бэлэн загваруудын жагсаалт — public/catalog.json (сайт ч мөн үүнийг уншдаг)
+let catalogCache = null;
+function catalog() {
+  if (!catalogCache) {
+    try { catalogCache = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'catalog.json'), 'utf8')); }
+    catch (err) { console.error('catalog.json уншиж чадсангүй:', err.message); catalogCache = []; }
+  }
+  return catalogCache;
+}
 
 // IP тус бүрээр 10 минутад 5 захиалга — спамаас хамгаална
 const hits = new Map();
@@ -42,13 +58,44 @@ export async function handleWebOrder(req, res) {
   if (b.website) return res.json({ orderId: 'OK' });          // honeypot — ботыг чимээгүй хаяна
   if (tooMany(req.ip)) return fail('Хэт олон захиалга илгээлээ. Түр хүлээгээд дахин оролдоно уу.', 429);
 
-  // --- Баглаа ---
-  const flowers = tally(b.flowers, PIXEL.flowers);
-  const fillers = tally(b.fillers, PIXEL.fillers);
-  if (flowers.total < 1) return fail('Баглаанд дор хаяж нэг цэцэг нэмнэ үү.');
-  if (flowers.total > LIMITS.flowers || fillers.total > LIMITS.fillers) return fail('Баглаа хэт том байна.');
-  const paper = PIXEL.papers[b.paper], ribbon = PIXEL.ribbons[b.ribbon];
-  if (!paper || !ribbon) return fail('Цаас, туузаа сонгоно уу.');
+  const list = arr => arr.map(([n, c]) => `${n}×${c}`).join(', ');
+  const details = {};
+  const noteParts = [];
+  let flowerText, qty, image = null;
+
+  if (b.product) {
+    // --- Бэлэн загвар ---
+    const item = catalog().find(p => p.id === String(b.product));
+    if (!item) return fail('Сонгосон баглаа олдсонгүй. Хуудсаа дахин ачаална уу.');
+    details.kind = 'ready';
+    details.product = `${item.name} (${item.id})`;
+    details.imageUrl = `${SITE_URL}/b/${item.photos[0]}`;
+    flowerText = `Бэлэн загвар: ${item.name} (${item.id})`;
+    qty = 1;
+  } else {
+    // --- Пиксел баглаа ---
+    const flowers = tally(b.flowers, PIXEL.flowers);
+    const fillers = tally(b.fillers, PIXEL.fillers);
+    if (flowers.total < 1) return fail('Баглаанд дор хаяж нэг цэцэг нэмнэ үү.');
+    if (flowers.total > LIMITS.flowers || fillers.total > LIMITS.fillers) return fail('Баглаа хэт том байна.');
+    const paper = PIXEL.papers[b.paper], ribbon = PIXEL.ribbons[b.ribbon];
+    if (!paper || !ribbon) return fail('Цаас, туузаа сонгоно уу.');
+
+    Object.assign(details, {
+      kind: 'pixel', flowers: list(flowers.out), fillers: list(fillers.out), stems: flowers.total, paper, ribbon,
+    });
+    noteParts.push(`Цаас: ${paper}`, `Тууз: ${ribbon}`);
+    if (fillers.total) noteParts.push(`Чимэглэл: ${details.fillers}`);
+    flowerText = `Пиксел баглаа: ${details.flowers}`;
+    qty = flowers.total;
+
+    // Харилцагчийн угсарсан зураг (PNG data URL, заавал биш)
+    if (typeof b.image === 'string' && b.image.startsWith('data:image/png;base64,')) {
+      const buf = Buffer.from(b.image.slice(22), 'base64');
+      const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+      if (isPng && buf.length <= 900 * 1024) image = buf;
+    }
+  }
 
   // --- Захиалагч ---
   const name = clean(b.name, 40);
@@ -81,40 +128,22 @@ export async function handleWebOrder(req, res) {
   const note = clean(b.note, 200);
   const allowSwap = b.allowSwap !== false;
 
-  // --- Зураг (PNG data URL, заавал биш) ---
-  let image = null;
-  if (typeof b.image === 'string' && b.image.startsWith('data:image/png;base64,')) {
-    const buf = Buffer.from(b.image.slice(22), 'base64');
-    const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
-    if (isPng && buf.length <= 900 * 1024) image = buf;
-  }
-
-  const list = arr => arr.map(([n, c]) => `${n}×${c}`).join(', ');
-  const details = {
-    flowers: list(flowers.out), fillers: list(fillers.out), stems: flowers.total,
-    paper, ribbon, message, allowSwap, note,
-    recipientName, recipientPhone, when: `${date} ${time}`,
-  };
-
-  const noteParts = [
-    `Цаас: ${paper}`, `Тууз: ${ribbon}`,
-    fillers.total ? `Чимэглэл: ${details.fillers}` : null,
-    message ? `Карт: “${message}”` : null,
-    recipientName || recipientPhone ? `Хүлээн авагч: ${[recipientName, recipientPhone].filter(Boolean).join(' ')}` : null,
-    allowSwap ? 'Солихыг зөвшөөрсөн' : 'СОЛИХГҮЙ',
-    note || null,
-  ].filter(Boolean);
+  Object.assign(details, { message, allowSwap, note, recipientName, recipientPhone, when: `${date} ${time}` });
+  if (message) noteParts.push(`Карт: “${message}”`);
+  if (recipientName || recipientPhone) noteParts.push(`Хүлээн авагч: ${[recipientName, recipientPhone].filter(Boolean).join(' ')}`);
+  noteParts.push(allowSwap ? 'Солихыг зөвшөөрсөн' : 'СОЛИХГҮЙ');
+  if (note) noteParts.push(note);
 
   try {
     const saved = await addOrder({
       name, phone,
-      flower: `Пиксел баглаа: ${details.flowers}`,
-      qty: flowers.total,
+      flower: flowerText,
+      qty,
       unitPrice: '',
       delivery, address,
       deliveryDate: details.when,
       note: noteParts.join(' | '),
-      source: 'Вэб (пиксел баглаа)',
+      source: details.kind === 'ready' ? 'Вэб (бэлэн загвар)' : 'Вэб (пиксел баглаа)',
     });
     // Discord мэдэгдэл бүтэлгүйтсэн ч захиалга хадгалагдсан тул хэрэглэгчид амжилттай гэж хариулна
     notifyWebOrder(saved, details, image).catch(err => console.error('Вэб захиалга Discord алдаа:', err.message));
