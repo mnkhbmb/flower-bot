@@ -127,7 +127,7 @@ function tidy(text, web) {
 // Текст асуултад хариулах (богино түүхтэй)
 export async function askAI(history, userText, opts = {}) {
   const req = {
-    max_tokens: 500,
+    max_tokens: 1000,
     system: await shopContext(opts),
     messages: [...history, { role: 'user', content: userText }],
   };
@@ -140,7 +140,8 @@ export async function askAI(history, userText, opts = {}) {
     console.error(`AI загвар ${TEXT_MODEL} ажилласангүй (${err.message}), ${FALLBACK_MODEL} ашиглалаа`);
     res = await anthropic.messages.create({ model: FALLBACK_MODEL, ...req });
   }
-  const text = res.content.find(c => c.type === 'text')?.text || '';
+  const text = res.content.filter(c => c.type === 'text').map(c => c.text).join('');
+  if (res.stop_reason !== 'end_turn') console.error('AI чат дутуу зогслоо:', res.stop_reason, JSON.stringify(res.usage));
   if (!text.trim()) throw new Error('AI хоосон хариу өглөө');
   return tidy(text, opts.web);
 }
