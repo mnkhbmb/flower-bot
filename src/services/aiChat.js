@@ -93,6 +93,8 @@ ${channel}
 HOW TO ANSWER:
 - Answer the question that was asked, first, in 1-3 short sentences. No preamble, no praise of the question.
 - Use only the FACTS above. Anything else (which districts are in the delivery zone, delivery fee, colours in stock, pick-up outside opening hours, custom requests, discounts) you do not know: say staff will confirm, e.g. "Үүнийг ажилтан маань тодруулж хэлнэ."${web ? ' and give the Messenger link.' : ''} Never guess.
+- Mention items from the stock list only when the customer asks what is available; do not volunteer extras (cards, candles, etc.).
+- Do not repeat ordering instructions or the Messenger link if you already gave them earlier in the conversation.
 - Do not end every reply with a question. Ask at most one question, and only when you need the answer to help.
 - Greet with "Сайн байна уу!" only when the customer's message is itself a greeting and it is the start of the conversation. Otherwise do not greet.
 - Only flowers and this shop. For anything else, decline politely in one sentence.
@@ -116,7 +118,7 @@ MONGOLIAN LANGUAGE (very important, customers notice mistakes):
 // Загварын хариултаас markdown-ийн үлдэгдлийг арилгана. Сайтад: жагсаалтад байхгүй баглааны
 // дугаар бичсэн бол холбоосыг каталог руу чиглүүлнэ.
 function tidy(text, web) {
-  let t = text.replace(/\*\*|__/g, '').replace(/^#{1,6}\s+/gm, '').replace(/^\s*[-*]\s+/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  let t = text.replace(/[⺀-鿿가-힯豈-﫿]/g, '').replace(/\*\*|__/g, '').replace(/^#{1,6}\s+/gm, '').replace(/^\s*[-*]\s+/gm, '').replace(/\n{3,}/g, '\n\n').trim();
   if (web) {
     const ids = new Set(readyBouquets().map(b => b.id));
     t = t.replace(/\/zagvar#(b\d{2})/g, (m, id) => (ids.has(id) ? m : '/zagvar'));
