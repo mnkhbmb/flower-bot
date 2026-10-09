@@ -35,6 +35,13 @@
     '.lpc-m.me{align-self:flex-end;background:var(--accent,#E23B41);color:var(--accent-ink,#fff)}',
     '.lpc-m.err{align-self:flex-start;border-style:dashed;color:var(--muted,#7A5F65)}',
     '.lpc-m a{color:inherit;font-weight:700}',
+    '.lpc-card{display:flex;align-items:center;gap:10px;margin:8px 0 2px;padding:6px;text-decoration:none;',
+    'background:var(--soft,#FFE1E4);border:2px solid var(--line,#2B1A1D);white-space:normal}',
+    '.lpc-card img{width:56px;height:56px;object-fit:cover;flex:none;border:2px solid var(--line,#2B1A1D)}',
+    '.lpc-card span{flex:1;min-width:0;line-height:1.25}',
+    '.lpc-card i{font-style:normal;flex:none;padding-right:4px}',
+    '.lpc-new{background:none;border:0;padding:6px 4px;font:600 12.5px "Golos Text",system-ui,sans-serif;',
+    'color:var(--accent,#E23B41);cursor:pointer;margin-left:auto;white-space:nowrap}',
     '.lpc-m.wait{color:var(--muted,#7A5F65);font-style:italic}',
     '.lpc-ideas{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px}',
     '.lpc-idea{padding:6px 9px;font:500 13px "Golos Text",system-ui,sans-serif;cursor:pointer;',
@@ -67,6 +74,7 @@
   panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'La Paradiso туслах');
   panel.innerHTML =
     '<div class="lpc-head"><div><b>La Paradiso туслах</b><small>AI хариулж байна</small></div>' +
+    '<button class="lpc-new" type="button">Шинэ яриа</button>' +
     '<button class="lpc-x" type="button" aria-label="Хаах">✕</button></div>' +
     '<div class="lpc-log" aria-live="polite"></div>' +
     '<div class="lpc-ideas"></div>' +
@@ -81,13 +89,39 @@
   var form = panel.querySelector('.lpc-form'), input = form.querySelector('textarea'), send = form.querySelector('.lpc-send');
   var busy = false;
 
-  // Текстийг аюулгүй болгоод сайтын зам (/zagvar#b20) болон https холбоосыг дарагддаг болгоно
+  // Бэлэн баглааны нэрс (картад харуулна). Анх нээхэд нэг удаа татна.
+  var names = null, namesStarted = false;
+  var PAGES = { '/zagvar': 'Бэлэн баглаанууд', '/baglaa': 'Баглаа угсрах', '/test': 'Цэцгийн тест', '/trivia': 'Асуулт тоглоом' };
+  function fillNames() {
+    if (!names) return;
+    var list = log.querySelectorAll('a[data-b]');
+    for (var i = 0; i < list.length; i++) {
+      var n = names[list[i].getAttribute('data-b')];
+      if (n) list[i].querySelector('span').textContent = n;
+    }
+  }
+  function loadNames() {
+    if (names || namesStarted) return;
+    namesStarted = true;
+    fetch('/catalog.json').then(function (r) { return r.json(); }).then(function (list) {
+      names = {};
+      list.forEach(function (b) { names[b.id] = b.name; });
+      fillNames();
+    }).catch(function () { namesStarted = false; });
+  }
+
+  // Текстийг аюулгүй болгоно. Баглааны холбоос (/zagvar#b20) зурагтай карт, сайтын бусад зам
+  // (/baglaa гэх мэт) нэртэй холбоос, https хаяг дарагддаг холбоос болно.
   function render(text) {
     var safe = String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    return safe.replace(/(https?:\/\/[^\s<]+[^\s<.,!?)])|(^|[\s(])(\/(?:zagvar|baglaa|test|trivia)(?:#b\d{2})?)(?![\w/])/g,
-      function (m, url, pre, pathname) {
-        if (url) return '<a href="' + url + '" target="_blank" rel="noopener">' + url + '</a>';
-        return pre + '<a href="' + pathname + '">' + pathname + '</a>';
+    return safe.replace(/(https?:\/\/[^\s<]+[^\s<.,!?)])|\s*\/zagvar#(b\d{2})(?![\w/])[.,;]?[ \t]*\n?|(^|[\s(])(\/(?:zagvar|baglaa|test|trivia))(?![\w/#])/g,
+      function (m, url, id, pre, pathname) {
+        if (url) return '<a href="' + url + '" target="_blank" rel="noopener">' + url.replace(/^https?:\/\//, '') + '</a>';
+        if (id) {
+          return '<a class="lpc-card" data-b="' + id + '" href="/zagvar#' + id + '">' +
+            '<img src="/b/' + id + '-s.jpg" alt="" loading="lazy"><span>Баглааг үзэх</span><i>→</i></a>';
+        }
+        return pre + '<a href="' + pathname + '">' + PAGES[pathname] + '</a>';
       });
   }
   function bubble(kind, text) {
@@ -95,6 +129,7 @@
     d.className = 'lpc-m ' + kind;
     if (kind === 'bot') d.innerHTML = render(text); else d.textContent = text;
     log.appendChild(d);
+    if (kind === 'bot') fillNames();
     log.scrollTop = log.scrollHeight;
     return d;
   }
@@ -140,11 +175,15 @@
     }).then(function () { busy = false; send.disabled = false; });
   }
 
-  function open() { panel.hidden = false; btn.hidden = true; redraw(); input.focus(); }
+  function open() { panel.hidden = false; btn.hidden = true; loadNames(); redraw(); input.focus(); }
   function close() { panel.hidden = true; btn.hidden = false; btn.focus(); }
 
   btn.addEventListener('click', open);
   panel.querySelector('.lpc-x').addEventListener('click', close);
+  panel.querySelector('.lpc-new').addEventListener('click', function () {
+    if (busy) return;
+    history = []; save(); redraw(); input.focus();
+  });
   panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
   form.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });
   input.addEventListener('keydown', function (e) {
