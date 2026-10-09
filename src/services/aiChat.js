@@ -3,6 +3,21 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CATALOG, PAYMENT_INFO, BOUQUET_ALBUM_URL, SHOW_PRICES, SHOP_INFO } from '../config/catalog.js';
 import { getFlowerTypes } from './sheets.js';
 import { sniffType } from './vision.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Сайтын бэлэн загварууд (public/catalog.json) — сайтын туслах тэдгээрийг санал болгоно
+let readyCache = null;
+function readyBouquets() {
+  if (!readyCache) {
+    try {
+      const file = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'public', 'catalog.json');
+      readyCache = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch { readyCache = []; }
+  }
+  return readyCache;
+}
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -11,7 +26,7 @@ const TEXT_MODEL = 'claude-haiku-4-5-20251001';
 const VISION_MODEL = 'claude-sonnet-4-6';
 
 // Дэлгүүрийн мэдээллийг system prompt болгон бэлдэх
-async function shopContext() {
+async function shopContext({ web = false } = {}) {
   // Агуулахад одоо байгаа цэцгүүд (5 мин кэштэй тул хурдан)
   let flowerBlock = '';
   try {
@@ -35,6 +50,26 @@ async function shopContext() {
     ? '- Үнэ, хүргэлт, баглааны талаар асуухад дээрх мэдээллээр хариул.'
     : '- Үнийн талаар асуувал тодорхой тоо бүү хэл; "ажилтан тань үнийг хэлнэ" гэж чиглүүл.';
 
+  const channelBlock = web
+    ? `Чи одоо дэлгүүрийн ВЭБ САЙТ дээр хариулж байна. Сайтын хуудсууд:
+- /zagvar — бэлэн баглаанууд, сонгоод шууд захиална
+- /baglaa — пиксел цэцгээр баглаагаа өөрөө угсарч захиална
+- /test — "Та ямар цэцэг вэ?" тест
+- /trivia — цэцгийн асуулт хариултын тоглоом
+
+Бэлэн баглаанууд (дугаар, нэр):
+${readyBouquets().map(b => `${b.id} ${b.name}`).join('; ')}
+`
+    : `Баглааны зургийн цомог: ${BOUQUET_ALBUM_URL}\n`;
+
+  const channelRules = web
+    ? `- Захиалах гэвэл /zagvar эсвэл /baglaa хуудсыг санал болго. Чи өөрөө захиалга авч чадахгүй.
+- Тодорхой баглаа санал болгохдоо холбоосыг нь яг ингэж бич: /zagvar#b20 (дугаар нь жагсаалтаас).
+  Жагсаалтад байхгүй баглаа, дугаар бүү зохио. Нэг хариултад хамгийн ихдээ 2 баглаа санал болго.
+- Юу авахаа мэдэхгүй байвал хэнд, ямар тохиолдлоор гэдгийг нэг асуугаад дараа нь санал болго.`
+    : `- Баглааны загвар үзэхийг хүсвэл цомгийн линкийг өг.
+- Захиалга өгөхийг хүсвэл "захиалга" гэж бичихийг санал болго.`;
+
   return `Чи бол "La Paradiso" цэцгийн дэлгүүрийн туслах бот. Үйлчлүүлэгчтэй монголоор, эелдэг, товч (1-3 өгүүлбэр) ярь.
 
 ${flowerBlock}${priceBlock}
@@ -43,14 +78,11 @@ ${flowerBlock}${priceBlock}
 🚚 Хүргэлт: ${SHOP_INFO.delivery}
 🗺️ Байршил: ${SHOP_INFO.maps}
 
-Төлбөр: ${PAYMENT_INFO}
-Баглааны зургийн цомог: ${BOUQUET_ALBUM_URL}
-
+${web ? '' : `Төлбөр: ${PAYMENT_INFO}\n`}${channelBlock}
 Дүрэм:
 ${priceRule}
 - Хаяг, цаг, хүргэлт, байршлын талаар асуувал дээрх мэдээллээр хариул.
-- Баглааны загвар үзэхийг хүсвэл цомгийн линкийг өг.
-- Захиалга өгөхийг хүсвэл "захиалга" гэж бичихийг санал болго.
+${channelRules}
 - Зөвхөн цэцэг / дэлгүүртэй холбоотой асуултад хариул.
 - Markdown (##, **, *, -, жагсаалт) ОГТ бүү ашигла — Messenger энгийн текст л харуулдаг. Emoji ашиглаж болно.
 - Хариулт богино байг: 1-3 өгүүлбэр, зураг тайлбарлахад ч мөн адил.
@@ -66,11 +98,11 @@ ${priceRule}
 }
 
 // Текст асуултад хариулах (богино түүхтэй)
-export async function askAI(history, userText) {
+export async function askAI(history, userText, opts = {}) {
   const res = await anthropic.messages.create({
     model: TEXT_MODEL,
     max_tokens: 500,
-    system: await shopContext(),
+    system: await shopContext(opts),
     messages: [...history, { role: 'user', content: userText }],
   });
   return res.content[0].text.trim();

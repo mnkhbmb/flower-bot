@@ -10,6 +10,7 @@ import { startGmailPoller } from './services/gmail.js';
 import { wasSentByBot } from './services/messenger.js';
 import { getTopSold } from './services/sheets.js';
 import { handleWebOrder } from './handlers/webOrder.js';
+import { handleWebChat } from './handlers/webChat.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
@@ -30,6 +31,8 @@ app.get('/trivia', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'trivia.html
 app.get('/trivia.json', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'trivia.json'), { maxAge: '10m' }));
 app.get('/logo.jpg', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'logo.jpg'), { maxAge: '7d' }));
 app.post('/api/orders', handleWebOrder);
+app.post('/api/chat', handleWebChat);
+app.get('/chat.js', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'chat.js'), { maxAge: '10m' }));
 
 // --- Их зарагддаг цэцгийн эрэмбэ (пиксел баглааны сайтад) ---
 // Зөвхөн нэрсийг эрэмбээр нь өгнө, борлуулалтын тоог нийтэд ил гаргахгүй. 10 мин кэштэй.
