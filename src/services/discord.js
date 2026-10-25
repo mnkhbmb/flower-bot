@@ -105,6 +105,21 @@ export async function startDiscord() {
   // Bot ready болсны дараа командуудыг бүртгэнэ
   client.once('clientReady', async (c) => {
     console.log(`✅ Discord bot: ${c.user.tag}`);
+
+    // Гүйлгээний суваг руу бичих эрхтэй эсэхийг эхэнд нь шалгаж логт хэлнэ
+    const txChannel = process.env.DISCORD_ZARDAL_CHANNEL_ID;
+    if (txChannel) {
+      try {
+        const ch = await c.channels.fetch(txChannel);
+        const perms = ch.permissionsFor(c.user);
+        const ok = perms?.has(['ViewChannel', 'SendMessages', 'EmbedLinks']);
+        console.log(ok
+          ? `✅ Гүйлгээний суваг: #${ch.name}`
+          : `❌ #${ch.name} сувагт бот харах/бичих эрхгүй — сувгийн тохиргоонд ботыг нэмнэ үү`);
+      } catch (err) {
+        console.error(`❌ DISCORD_ZARDAL_CHANNEL_ID (${txChannel}) сувгийг олж чадсангүй: ${err.message}`);
+      }
+    }
     try {
       const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN);
       await rest.put(
@@ -832,8 +847,14 @@ export async function notifyTransaction(tx) {
     console.error('❌ DISCORD_ZARDAL_CHANNEL_ID тохируулаагүй — гүйлгээ явуулсангүй');
     return;
   }
-  const channel = await client.channels.fetch(channelId);
-  await channel.send(txMessage(tx));
+  try {
+    const channel = await client.channels.fetch(channelId);
+    await channel.send(txMessage(tx));
+  } catch (err) {
+    // Private суваг бол ботыг тэр сувагт нэмээгүй үед "Missing Access" гарна
+    console.error(`❌ Гүйлгээний мэдэгдэл явуулж чадсангүй (суваг ${channelId}): ${err.message}. ` +
+      'Сувгийн ID зөв эсэх, бот тэр сувгийг харах/бичих эрхтэй эсэхийг шалгана уу. Гүйлгээ sheet-д бичигдсэн.');
+  }
 }
 
 // Гүйлгээний мэдэгдэл: embed + ангилал солих цэс (+ урьдчилгаа бол "хасахгүй" товч).
