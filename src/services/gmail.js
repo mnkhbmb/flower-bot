@@ -39,7 +39,7 @@ async function extractPdfText(buffer) {
 }
 
 // Имэйлээс боловсруулах текст сонгох: plain → html → PDF (заавраар)
-async function extractText(parsed) {
+export async function extractText(parsed) {
   // 1. text/plain дотор дүн байвал шууд
   if (parsed.text && hasAmount(parsed.text)) return parsed.text;
   // 2. text/html → цэвэрлээд дүн байвал (Голомт, ХХБ EBANK)
@@ -54,6 +54,24 @@ async function extractText(parsed) {
   }
   // 4. Fallback — ямар нэг текст
   return parsed.text || stripped || '';
+}
+
+// Задалсан и-мэйл + текстээс гүйлгээний объект (Gmail, Yahoo хоёулаа ашиглана)
+export function buildTx(parsed, text) {
+  const base = parseTransactionBody(text);
+  // Улаанбаатарын цагаар огноо, цаг
+  const ub = new Date((parsed.date ? new Date(parsed.date) : new Date()).getTime() + 8 * 3600 * 1000).toISOString();
+  return {
+    ...base,
+    date: ub.slice(0, 10),
+    time: ub.slice(11, 16),
+    balance: extractBalance(text),
+    ownTransfer: isOwnTransfer(text),
+    parsed: base.amount != null,
+    subject: (parsed.subject || '').trim(),
+    // Нэг и-мэйлийг хоёр удаа бүртгэхгүйн тулд
+    key: parsed.messageId || [ub, base.amount, base.description].join('|'),
+  };
 }
 
 async function checkInbox() {
@@ -78,22 +96,7 @@ async function checkInbox() {
         try {
           const msg = await client.fetchOne(uid, { source: true }, { uid: true });
           const parsed = await simpleParser(msg.source);
-          const text = await extractText(parsed);
-          const base = parseTransactionBody(text);
-          // Улаанбаатарын цагаар огноо, цаг
-          const ub = new Date((parsed.date ? new Date(parsed.date) : new Date()).getTime() + 8 * 3600 * 1000).toISOString();
-          const tx = {
-            ...base,
-            date: ub.slice(0, 10),
-            time: ub.slice(11, 16),
-            balance: extractBalance(text),
-            ownTransfer: isOwnTransfer(text),
-            parsed: base.amount != null,
-            subject: (parsed.subject || '').trim(),
-            // Нэг и-мэйлийг хоёр удаа бүртгэхгүйн тулд
-            key: parsed.messageId || `${ub}|${base.amount}|${base.description}`,
-          };
-          await recordTransaction(tx);
+          await recordTransaction(buildTx(parsed, await extractText(parsed)));
         } catch (err) {
           console.error('Gmail нэг и-мэйл боловсруулах алдаа:', err.message);
         }

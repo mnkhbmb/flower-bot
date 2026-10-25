@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
 import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
+import { startYahooPoller } from './services/yahoo.js';
 import { wasSentByBot } from './services/messenger.js';
 import { getTopSold } from './services/sheets.js';
 import { handleWebOrder } from './handlers/webOrder.js';
@@ -154,6 +155,7 @@ app.listen(PORT, async () => {
   console.log(`✅ Сервер ${PORT} порт дээр ажиллаж байна`);
   await startDiscord();
   startGmailPoller();   // Gmail-ийн банкны и-мэйл шалгах (env тохируулсан бол)
+  startYahooPoller();   // Хаан банкны мэдэгдэл ирдэг Yahoo шуудан (env тохируулсан бол)
 });
 
 // --- CRON: өдөр бүр 20:00-д хаалт/гарлаа бүртгүүлэх сануулга ---

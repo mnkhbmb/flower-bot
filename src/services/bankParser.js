@@ -117,6 +117,16 @@ export function parseTransactionBody(text) {
   return parseGeneric(text);
 }
 
+// Текстэд тухайн дансны дугаар байгаа эсэх — бүтэн, эсвэл масклагдсан
+// ("501****352", "****3352") хэлбэрээр
+export function mentionsAccount(text, id) {
+  const t = text || '';
+  const acc = String(id || '').replace(/\D/g, '');
+  if (acc.length < 6) return false;
+  if (t.includes(acc)) return true;
+  return new RegExp(`${acc.slice(0, 3)}[*xX•]+${acc.slice(-3)}|[*xX•]{2,}${acc.slice(-4)}(?!\\d)`).test(t);
+}
+
 // ===== Дэлгүүрийн өөрийн данс хоорондын шилжүүлэг =====
 // BANK_OWN_ACCOUNTS="5005616977,5011413352" — хоёр нь зэрэг текстэд гарвал дотоод шилжүүлэг
 // (орлого/зарлагад тооцохгүй). Масклагдсан хэлбэрийг ("500****977") ч таньна.
