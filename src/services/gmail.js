@@ -105,7 +105,10 @@ async function checkInbox() {
     }
   } catch (err) {
     if (/mailbox|not.*exist|NONEXISTENT/i.test(err.message)) {
-      console.error(`❌ Gmail-д "${LABEL}" label олдсонгүй. Label нэрээ шалга (GMAIL_BANK_LABEL).`);
+      // Байгаа label-уудыг жагсааж өгнө — аль нь зөв болохыг шууд харахад
+      const boxes = await client.list().catch(() => []);
+      const names = boxes.map(b => b.path).filter(p => !p.startsWith('[Gmail]') && p !== 'INBOX');
+      console.error(`❌ Gmail-д "${LABEL}" label олдсонгүй. GMAIL_BANK_LABEL-ийг эдгээрийн аль нэгээр солино уу: ${names.join(', ') || '(label алга)'}`);
     } else {
       throw err;
     }
