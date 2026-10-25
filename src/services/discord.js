@@ -1,6 +1,7 @@
 // Discord bot — мэдэгдэл болон тайлан
-import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting } from './sheets.js';
+import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder } from 'discord.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals } from './sheets.js';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, findPerson } from '../config/bankCategories.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -12,6 +13,11 @@ const DIRECTORS = [
   { name: 'Саруул', amount: 750000 },
   { name: 'Лулу',   amount: 750000 },
 ];
+
+// Банкны утгаас нэр таних, урьдчилгааг цалингаас хасахад ашиглана
+export function salaryPeople() {
+  return [...WORKERS, ...DIRECTORS.map(d => d.name)];
+}
 
 // Командууд бүртгэх
 const commands = [
@@ -77,6 +83,20 @@ const commands = [
     .addStringOption(o => o.setName('ner').setDescription('Хэн авсан бэ? (хоосон бол өөрийн нэр)').setRequired(false))
     .addStringOption(o => o.setName('temdeglel').setDescription('Тэмдэглэл').setRequired(false))
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('tsalin-unelgee')
+    .setDescription('Ажилтны өдрийн цалин харах / тохируулах (тохируулаагүй бол үндсэн дүнгээр)')
+    .addStringOption(o => o.setName('ner').setDescription('Ажилтны нэр (Ирц дээрхтэй ижил)')
+      .setRequired(false).setAutocomplete(true))
+    .addIntegerOption(o => o.setName('dun').setDescription('Өдрийн цалин ₮ (0 = үндсэн дүнд буцаах)')
+      .setMinValue(0).setMaxValue(10000000).setRequired(false))
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('guilgee')
+    .setDescription('Банкны бодит орлого / зарлага (ангиллаар)')
+    .addIntegerOption(o => o.setName('honog').setDescription('Сүүлийн хэдэн хоног (default 30)')
+      .setMinValue(1).setMaxValue(365).setRequired(false))
+    .toJSON(),
 ];
 
 export async function startDiscord() {
@@ -101,6 +121,80 @@ export async function startDiscord() {
 
   // Командууд болон modal submit хариулах
   client.on('interactionCreate', async (interaction) => {
+
+    // /tsalin-unelgee — ажилтны нэрийг Ирц-ээс санал болгоно
+    if (interaction.isAutocomplete()) {
+      try {
+        const typed = String(interaction.options.getFocused() || '').toLowerCase();
+        const names = [...new Set([...WORKERS, ...(await getWorkerNames())])]
+          .filter(n => !DIRECTORS.some(d => d.name === n))
+          .filter(n => n.toLowerCase().includes(typed))
+          .slice(0, 25);
+        await interaction.respond(names.map(n => ({ name: n, value: n })));
+      } catch {
+        await interaction.respond([]).catch(() => {});
+      }
+      return;
+    }
+
+    // Банкны гүйлгээний ангилал солих цэс
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('txcat:')) {
+      await interaction.deferUpdate();
+      try {
+        const row = Number(interaction.customId.split(':')[1]);
+        const category = interaction.values[0];
+        const found = await getTransaction(row);
+        if (!found) {
+          await interaction.followUp({ content: '⚠️ Гүйлгээ sheet-ээс олдсонгүй.', ephemeral: true });
+          return;
+        }
+        const old = found.tx;
+        let person = old.person;
+        let note = '';
+        if (old.category === 'Урьдчилгаа' && category !== 'Урьдчилгаа') {
+          await removeZeelByTag(`[tx:${row}]`);
+          if (old.person) note = `↩️ Цалингаас хасахаа болилоо: **${old.person}**`;
+          person = '';
+        }
+        if (category === 'Урьдчилгаа' && old.category !== 'Урьдчилгаа') {
+          const people = [...new Set([...salaryPeople(), ...(await getWorkerNames())])];
+          person = findPerson(old.description, people) || '';
+          if (person && old.amount > 0) {
+            await saveZeel({ name: person, amount: old.amount, date: old.date, note: `Банк: ${old.description || '—'} [tx:${row}]` });
+            note = `💸 Цалингаас хасна: **${person}** — ${old.amount.toLocaleString()}₮`;
+          } else {
+            note = '⚠️ Утгаас ажилтны нэр олдсонгүй. Хэнийх болохыг `/zeel`-ээр бүртгэнэ үү.';
+          }
+        }
+        const tx = await updateTransaction(row, { category, person });
+        await interaction.editReply(txMessage(tx));
+        if (note) await interaction.followUp({ content: note, ephemeral: true });
+      } catch (err) {
+        console.error('txcat error:', err.message);
+        await interaction.followUp({ content: '⚠️ Ангилал солиход алдаа гарлаа.', ephemeral: true }).catch(() => {});
+      }
+      return;
+    }
+
+    // "Цалингаас хасахгүй" товч — автоматаар бүртгэсэн урьдчилгааг буцаана
+    if (interaction.isButton() && interaction.customId.startsWith('txnozeel:')) {
+      await interaction.deferUpdate();
+      try {
+        const row = Number(interaction.customId.split(':')[1]);
+        const found = await getTransaction(row);
+        await removeZeelByTag(`[tx:${row}]`);
+        const tx = await updateTransaction(row, { category: 'Бусад зарлага', person: '' });
+        if (tx) await interaction.editReply(txMessage(tx));
+        await interaction.followUp({
+          content: `↩️ Цалингаас хасахаа болилоо${found?.tx.person ? `: **${found.tx.person}**` : ''}. Ангиллыг цэснээс сонгож болно.`,
+          ephemeral: true,
+        });
+      } catch (err) {
+        console.error('txnozeel error:', err.message);
+        await interaction.followUp({ content: '⚠️ Буцаахад алдаа гарлаа.', ephemeral: true }).catch(() => {});
+      }
+      return;
+    }
 
     // "Хорогдол нэмэх" товч (хаалтын хариун дээрх) → цонх нээнэ
     if (interaction.isButton() && interaction.customId === 'horogdol_open') {
@@ -469,6 +563,65 @@ export async function startDiscord() {
       return;
     }
 
+    // /tsalin-unelgee — өдрийн цалин харах / тохируулах
+    if (interaction.commandName === 'tsalin-unelgee') {
+      await interaction.deferReply();
+      try {
+        const name = (interaction.options.getString('ner') || '').trim();
+        const amount = interaction.options.getInteger('dun');
+
+        if (name && amount != null) {
+          await setSalaryRate(name, amount);
+          const known = await getWorkerNames();
+          const warn = known.some(n => n.toLowerCase() === name.toLowerCase())
+            ? ''
+            : `\n⚠️ Ирц дээр **${name}** нэртэй бүртгэл алга. Ирц дээрх нэртэй яг ижил бичнэ үү.`;
+          await interaction.editReply(amount > 0
+            ? `✅ **${name}** — өдрийн цалин **${amount.toLocaleString()}₮** боллоо.${warn}`
+            : `↩️ **${name}** — үндсэн дүнд буцлаа (${DEFAULT_DAILY_RATE.toLocaleString()}₮/өдөр).`);
+          return;
+        }
+
+        // Жагсаалт харуулах (нэг хүн эсвэл бүгд)
+        const rates = await getSalaryRates();
+        const names = [...new Set([...WORKERS, ...(await getWorkerNames()), ...Object.keys(rates)])]
+          .filter(n => !DIRECTORS.some(d => d.name === n))
+          .filter(n => !name || n.toLowerCase() === name.toLowerCase());
+        if (name && !names.length) names.push(name);
+        const lines = names.map(n => {
+          const custom = Object.keys(rates).some(k => k.toLowerCase() === n.toLowerCase());
+          return `• **${n}** — ${rateFor(rates, n).toLocaleString()}₮${custom ? '' : ' _(үндсэн)_'}`;
+        });
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor(0xF4B400)
+            .setTitle('💵 Өдрийн цалингийн үнэлгээ')
+            .setDescription((lines.join('\n') || 'Ажилтан алга') +
+              `\n\nҮндсэн дүн: **${DEFAULT_DAILY_RATE.toLocaleString()}₮**\nӨөрчлөх: \`/tsalin-unelgee ner:Амина dun:75000\``)],
+        });
+      } catch (err) {
+        console.error('tsalin-unelgee error:', err.message);
+        await interaction.editReply('⚠️ Цалингийн үнэлгээ хадгалахад алдаа гарлаа.');
+      }
+      return;
+    }
+
+    // /guilgee — банкны бодит орлого / зарлага
+    if (interaction.commandName === 'guilgee') {
+      await interaction.deferReply();
+      try {
+        const days = interaction.options.getInteger('honog') ?? 30;
+        const to = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+        const from = new Date(Date.now() + 8 * 3600 * 1000 - (days - 1) * 86400000).toISOString().slice(0, 10);
+        const t = await getTransactionTotals(from, to);
+        await interaction.editReply({ embeds: [bankEmbed(t, await getPeriodReport(from, to).catch(() => null))] });
+      } catch (err) {
+        console.error('guilgee error:', err.message);
+        await interaction.editReply('⚠️ Гүйлгээний тайлан гаргахад алдаа гарлаа.');
+      }
+      return;
+    }
+
     // /zeel — цалингаас өмнө авсан зээл/урьдчилгаа бүртгэх
     if (interaction.commandName === 'zeel') {
       await interaction.deferReply();
@@ -680,33 +833,101 @@ export async function notifyTransaction(tx) {
     return;
   }
   const channel = await client.channels.fetch(channelId);
+  await channel.send(txMessage(tx));
+}
 
+// Гүйлгээний мэдэгдэл: embed + ангилал солих цэс (+ урьдчилгаа бол "хасахгүй" товч).
+// Ангилал солиход ч энэ функцээр дахин зурна.
+function txMessage(tx) {
   const isIncome = tx.txType === 'Орлого';
-  const sign = isIncome ? '+' : '-';
-  const amountStr = tx.amount != null
-    ? `**${sign}${tx.amount.toLocaleString()}₮**`
+  const amountStr = tx.amount
+    ? `**${isIncome ? '+' : '-'}${tx.amount.toLocaleString()}₮**`
     : '_тодорхойгүй_';
 
   const embed = new EmbedBuilder()
     .setColor(isIncome ? 0x2ECC71 : 0xE74C3C)
-    .setTitle(isIncome ? '💵 Шинэ орлого' : '💸 Шинэ зардал')
+    .setTitle(isIncome ? '💵 Шинэ орлого' : '💸 Шинэ зарлага')
     .addFields(
       { name: '💰 Дүн', value: amountStr, inline: true },
       { name: '🏦 Банк', value: tx.bank || '—', inline: true },
-      { name: '📅 Огноо', value: tx.date || '—', inline: true },
-      { name: '📝 Утга', value: tx.description || '—', inline: false },
+      { name: '📅 Огноо', value: `${tx.date || '—'}${tx.time ? ` ${tx.time}` : ''}`, inline: true },
+      { name: '📝 Утга', value: (tx.description || '—').slice(0, 1000), inline: false },
+      { name: '🏷️ Ангилал', value: `\`${tx.category || '—'}\``, inline: true },
     )
+    .setFooter({ text: `"Гүйлгээ" tab · мөр ${tx.row}` })
     .setTimestamp();
 
   if (tx.balance != null) {
     embed.addFields({ name: '🧾 Үлдэгдэл', value: `${tx.balance.toLocaleString()}₮`, inline: true });
   }
-  // regex дүн олоогүй бол эх и-мэйлийн гарчгийг нэмж харуулна (тохируулахад тус болно)
-  if (!tx.parsed && tx.subject) {
+  const advance = tx.category === 'Урьдчилгаа' && tx.person;
+  if (advance) {
+    embed.addFields({
+      name: '👩 Цалингаас хасна',
+      value: `**${tx.person}** — ${tx.amount.toLocaleString()}₮ (Зээл tab-д бүртгэлээ)`,
+      inline: false,
+    });
+  }
+  // Дүн автоматаар олдоогүй бол эх и-мэйлийн гарчгийг харуулна (тохируулахад тус болно)
+  if (tx.parsed === false && tx.subject) {
     embed.setFooter({ text: `⚠️ Дүн автоматаар олдсонгүй · ${tx.subject.slice(0, 80)}` });
   }
 
-  await channel.send({ embeds: [embed] });
+  const options = (isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES)
+    .map(c => ({ label: c, value: c, default: c === tx.category }));
+  const components = [
+    new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`txcat:${tx.row}`)
+        .setPlaceholder('📂 Ангилал солих')
+        .addOptions(options),
+    ),
+  ];
+  if (advance) {
+    components.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`txnozeel:${tx.row}`)
+        .setLabel('Цалингаас хасахгүй')
+        .setStyle(ButtonStyle.Secondary),
+    ));
+  }
+  return { embeds: [embed], components };
+}
+
+// Банкны бодит гүйлгээний нэгтгэл. period (хаалтын тайлан) өгвөл хаалтаар бүртгэсэн
+// Данс+Пос-той харьцуулж зөрүүг харуулна.
+function bankEmbed(t, period) {
+  const mn = n => `${Math.round(n).toLocaleString()}₮`;
+  const list = by => Object.entries(by)
+    .sort((x, y) => y[1] - x[1])
+    .map(([cat, amt]) => `${cat} — **${mn(amt)}**`)
+    .join('\n') || '—';
+
+  const embed = new EmbedBuilder()
+    .setColor(0x1E88E5)
+    .setTitle(`🏦 Банкны бодит гүйлгээ — ${t.from} ~ ${t.to}`)
+    .addFields(
+      { name: '💵 Орсон', value: `**${mn(t.income)}**`, inline: true },
+      { name: '💸 Гарсан', value: `**${mn(t.expense)}**`, inline: true },
+      { name: '🟰 Цэвэр', value: `**${mn(t.income - t.expense)}**`, inline: true },
+      { name: 'Орлого (ангиллаар)', value: list(t.incomeBy).slice(0, 1000), inline: false },
+      { name: 'Зарлага (ангиллаар)', value: list(t.expenseBy).slice(0, 1000), inline: false },
+    )
+    .setFooter({ text: `${t.count} гүйлгээ · өөрийн данс хоорондын шилжүүлгийг тооцоогүй` })
+    .setTimestamp();
+
+  if (period && period.count) {
+    const recorded = period.dans + period.pos;
+    const sales = t.incomeBy['Борлуулалт'] || 0;
+    const diff = sales - recorded;
+    embed.addFields({
+      name: '🔎 Хаалттай тулгалт',
+      value: `Хаалтаар бүртгэсэн Данс + Пос: ${mn(recorded)}\nБанкаар орсон борлуулалт: ${mn(sales)}\n` +
+        (diff === 0 ? '✅ Таарч байна' : `Зөрүү: **${diff > 0 ? '+' : ''}${mn(diff)}**`),
+      inline: false,
+    });
+  }
+  return embed;
 }
 
 // Өдрийн тайлангийн embed
@@ -777,7 +998,7 @@ async function buildSalaryEmbed(from, to, { save = false } = {}) {
     netWorkers[name] = { ...data, salary: data.salary - adv };
     return {
       name: `👩 ${name}`,
-      value: `📅 ${data.days} өдөр · ⏱ ${data.hours} цаг\n${line(data.salary, adv)}`,
+      value: `📅 ${data.days} өдөр × ${data.rate.toLocaleString()}₮ · ⏱ ${data.hours} цаг\n${line(data.salary, adv)}`,
       inline: false,
     };
   });
@@ -816,10 +1037,19 @@ async function buildSalaryEmbed(from, to, { save = false } = {}) {
 
   // Тухайн хугацааны орлого/зарлага (Өдрийн хаалт tab-аас)
   let financeEmbeds = [];
+  let period = null;
   try {
-    financeEmbeds = [financeEmbed(await getPeriodReport(from, to))];
+    period = await getPeriodReport(from, to);
+    financeEmbeds = [financeEmbed(period)];
   } catch (err) {
     console.error('Хугацааны орлого унших алдаа:', err.message);
+  }
+  // Банкны бодит гүйлгээ (Gmail-ээс автоматаар) — бүртгэл байвал л
+  try {
+    const t = await getTransactionTotals(from, to);
+    if (t.count) financeEmbeds.push(bankEmbed(t, period));
+  } catch (err) {
+    console.error('Банкны гүйлгээ унших алдаа:', err.message);
   }
 
   // Тухайн хугацаанд хамгийн их зарагдсан цэцэг (Хаалт задаргаа tab-аас)

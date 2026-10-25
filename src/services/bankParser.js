@@ -66,7 +66,8 @@ function detectType(text) {
 // ===== ХасБанк — PDF текстээс =====
 export function parseXacPdf(text) {
   // Дүн: эхний "Дүн:" (шимтгэлийн дүнг алгасахын тулд эхнийхийг л)
-  const amtStr = text.match(/Дүн:\s*([\d,.]+)/)?.[1];
+  // "Дүн:" (PDF) ба "Гүйлгээний дүн:" (HTML мэдэгдэл) хоёуланг
+  const amtStr = text.match(/дүн:\s*([\d,.]+)/i)?.[1];
   const amount = amtStr ? Math.abs(toNum(amtStr)) : null;
 
   // Гүйлгээний утга: → шимтгэл/хийсэн/Энэхүү хүртэл
@@ -79,7 +80,8 @@ export function parseXacPdf(text) {
       .trim() || '—';
   }
 
-  const txType = /Төрөл:\s*Орлого/i.test(text) ? 'Орлого' : 'Зарлага';
+  // PDF нь илгээгчийн баримт (зарлага); HTML "ОРЛОГЫН ГҮЙЛГЭЭ" мэдэгдэл орлого
+  const txType = /Төрөл:\s*Орлого|орлогын гүйлгээ/i.test(text) ? 'Орлого' : 'Зарлага';
   return { bank: 'ХасБанк', txType, amount, description };
 }
 
@@ -113,4 +115,15 @@ export function parseTransactionBody(text) {
     return parseKhan(text);
   }
   return parseGeneric(text);
+}
+
+// ===== Дэлгүүрийн өөрийн данс хоорондын шилжүүлэг =====
+// BANK_OWN_ACCOUNTS="5005616977,5011413352" — хоёр нь зэрэг текстэд гарвал дотоод шилжүүлэг
+// (орлого/зарлагад тооцохгүй). Масклагдсан хэлбэрийг ("500****977") ч таньна.
+export function isOwnTransfer(text) {
+  const ids = String(process.env.BANK_OWN_ACCOUNTS || '').split(/[,\s]+/).filter(x => x.length >= 6);
+  const t = text || '';
+  const hits = ids.filter(id =>
+    t.includes(id) || new RegExp(id.slice(0, 3) + '\\*+' + id.slice(-3)).test(t));
+  return hits.length >= 2;
 }

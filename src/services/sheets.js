@@ -155,8 +155,7 @@ export async function getSalaryReport(from, to, exclude = []) {
   const d = await ensureLoaded();
   const sheet = d.sheetsByTitle['Ирц'];
   const rows = await sheet.getRows();
-
-  const DAILY_RATE = 71500;
+  const rates = await getSalaryRates();
 
   // Нэг ажилтны нэг өдрийг НЭГ л удаа тоолно — давхар бүртгэлийг огноогоор нэгтгэж,
   // хамгийн эрт ирсэн / хамгийн орой гарсан цагийг авна.
@@ -203,7 +202,8 @@ export async function getSalaryReport(from, to, exclude = []) {
     result[name] = {
       days: detail.length,
       hours: (totalMinutes / 60).toFixed(1),
-      salary: detail.length * DAILY_RATE,
+      rate: rateFor(rates, name),
+      salary: detail.length * rateFor(rates, name),
       detail,
     };
   }
@@ -380,7 +380,7 @@ export async function saveSalaryToSheet(from, to, workers, directors) {
 }
 
 // Зээл / урьдчилгаа хадгалах — "Зээл" tab (байхгүй бол үүсгэнэ)
-export async function saveZeel({ name, amount, note }) {
+export async function saveZeel({ name, amount, note, date }) {
   const d = await ensureLoaded();
   let sheet = findSheet(d, 'Зээл');
   if (!sheet) {
@@ -389,7 +389,7 @@ export async function saveZeel({ name, amount, note }) {
       headerValues: ['Огноо', 'Ажилтан', 'Дүн', 'Тэмдэглэл'],
     });
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = date || new Date().toISOString().slice(0, 10);
   await sheet.addRow({
     'Огноо': today,
     'Ажилтан': name,
@@ -713,4 +713,139 @@ export async function saveHorogdol({ name, text }) {
     'Төрөл':   'Хорогдол',
   })));
   return items;
+}
+
+// ===== Ажилтны өдрийн цалингийн үнэлгээ (/tsalin-unelgee) =====
+// "Тохиргоо" tab-д "tsalin:Амина" = 75000 хэлбэрээр. Тохируулаагүй бол DEFAULT_DAILY_RATE.
+export const DEFAULT_DAILY_RATE = 71500;
+const RATE_PREFIX = 'tsalin:';
+const sameName = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+
+export async function getSalaryRates() {
+  const d = await ensureLoaded();
+  const sheet = await settingsSheet(d, false);
+  if (!sheet) return {};
+  const out = {};
+  for (const r of await sheet.getRows()) {
+    const key = String(r.get('Түлхүүр') || '').trim();
+    if (!key.startsWith(RATE_PREFIX)) continue;
+    const n = Number(String(r.get('Утга') ?? '').replace(/[^\d]/g, ''));
+    if (n > 0) out[key.slice(RATE_PREFIX.length).trim()] = n;
+  }
+  return out;
+}
+
+export function rateFor(rates, name) {
+  const key = Object.keys(rates).find(k => sameName(k, name));
+  return key ? rates[key] : DEFAULT_DAILY_RATE;
+}
+
+// amount 0 буюу хоосон бол үндсэн үнэлгээнд буцна
+export async function setSalaryRate(name, amount) {
+  const rates = await getSalaryRates();
+  const existing = Object.keys(rates).find(k => sameName(k, name)) || name.trim();
+  await setSetting(RATE_PREFIX + existing, amount > 0 ? amount : '');
+}
+
+// Ирц дээр бүртгэлтэй ажилтнуудын нэр (autocomplete, банкны утгаас нэр таних). 5 мин кэш.
+let namesCache = { at: 0, names: [] };
+export async function getWorkerNames() {
+  if (Date.now() - namesCache.at < 5 * 60 * 1000) return namesCache.names;
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Ирц'];
+  const names = new Set();
+  if (sheet) {
+    for (const r of await sheet.getRows()) {
+      const n = String(r.get('Ажилтан') || '').trim();
+      if (n) names.add(n);
+    }
+  }
+  namesCache = { at: Date.now(), names: [...names] };
+  return namesCache.names;
+}
+
+// ===== Банкны гүйлгээ — "Гүйлгээ" tab (байхгүй бол үүсгэнэ) =====
+const TX_HEADERS = ['Огноо', 'Цаг', 'Банк', 'Төрөл', 'Дүн', 'Утга', 'Ангилал', 'Үлдэгдэл', 'Ажилтан', 'Түлхүүр'];
+
+async function txSheet(d) {
+  let sheet = findSheet(d, 'Гүйлгээ');
+  if (!sheet) sheet = await d.addSheet({ title: 'Гүйлгээ', headerValues: TX_HEADERS });
+  return sheet;
+}
+
+function rowToTx(r) {
+  const num = v => Number(String(v ?? '').replace(/[^\d.-]/g, '')) || 0;
+  return {
+    row: r.rowNumber,
+    date: String(r.get('Огноо') || ''),
+    time: String(r.get('Цаг') || ''),
+    bank: String(r.get('Банк') || ''),
+    txType: String(r.get('Төрөл') || ''),
+    amount: num(r.get('Дүн')),
+    description: String(r.get('Утга') || ''),
+    category: String(r.get('Ангилал') || ''),
+    balance: r.get('Үлдэгдэл') === '' || r.get('Үлдэгдэл') == null ? null : num(r.get('Үлдэгдэл')),
+    person: String(r.get('Ажилтан') || ''),
+  };
+}
+
+// Давхардсан (ижил түлхүүртэй) гүйлгээ бол { duplicate: true }
+export async function saveTransaction(tx) {
+  const d = await ensureLoaded();
+  const sheet = await txSheet(d);
+  if (tx.key) {
+    const rows = await sheet.getRows();
+    if (rows.some(r => String(r.get('Түлхүүр') || '') === tx.key)) return { duplicate: true };
+  }
+  const row = await sheet.addRow({
+    'Огноо': tx.date, 'Цаг': tx.time || '', 'Банк': tx.bank || '', 'Төрөл': tx.txType,
+    'Дүн': tx.amount ?? '', 'Утга': tx.description || '', 'Ангилал': tx.category || '',
+    'Үлдэгдэл': tx.balance ?? '', 'Ажилтан': tx.person || '', 'Түлхүүр': tx.key || '',
+  });
+  return { duplicate: false, tx: rowToTx(row) };
+}
+
+export async function getTransaction(rowNumber) {
+  const d = await ensureLoaded();
+  const sheet = await txSheet(d);
+  const r = (await sheet.getRows()).find(x => x.rowNumber === rowNumber);
+  return r ? { r, tx: rowToTx(r) } : null;
+}
+
+export async function updateTransaction(rowNumber, { category, person }) {
+  const found = await getTransaction(rowNumber);
+  if (!found) return null;
+  if (category !== undefined) found.r.set('Ангилал', category);
+  if (person !== undefined) found.r.set('Ажилтан', person || '');
+  await found.r.save();
+  return rowToTx(found.r);
+}
+
+// Хугацааны банкны гүйлгээг нэгтгэх → { count, income, expense, incomeBy, expenseBy }
+// "Өөрийн данс хооронд" шилжүүлгийг нийлбэрт оруулахгүй.
+export async function getTransactionTotals(from, to) {
+  const d = await ensureLoaded();
+  const out = { from, to, count: 0, income: 0, expense: 0, incomeBy: {}, expenseBy: {} };
+  const sheet = findSheet(d, 'Гүйлгээ');
+  if (!sheet) return out;
+  for (const r of await sheet.getRows()) {
+    const tx = rowToTx(r);
+    if (!tx.date || tx.date < from || tx.date > to || tx.category === 'Өөрийн данс хооронд') continue;
+    out.count++;
+    const cat = tx.category || 'Бусад';
+    if (tx.txType === 'Орлого') { out.income += tx.amount; out.incomeBy[cat] = (out.incomeBy[cat] || 0) + tx.amount; }
+    else { out.expense += tx.amount; out.expenseBy[cat] = (out.expenseBy[cat] || 0) + tx.amount; }
+  }
+  return out;
+}
+
+// Банкнаас автоматаар бүртгэсэн урьдчилгааг буцаах — Тэмдэглэлд "[tx:12]" шошготой мөр
+export async function removeZeelByTag(tag) {
+  const d = await ensureLoaded();
+  const sheet = findSheet(d, 'Зээл');
+  if (!sheet) return 0;
+  const rows = (await sheet.getRows()).filter(r => String(r.get('Тэмдэглэл') || '').includes(tag));
+  // Доороос нь устгана — дээрээс устгавал доорх мөрийн дугаар шилждэг
+  for (const r of rows.reverse()) await r.delete();
+  return rows.length;
 }

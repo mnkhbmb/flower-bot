@@ -1,10 +1,10 @@
 // Gmail-аас "bank-transaction" label-тай и-мэйлүүдийг IMAP-аар уншиж,
-// задлаад Discord руу зардлын мэдэгдэл явуулна.
+// задлаад "Гүйлгээ" tab-д хадгалж, Discord руу мэдэгдэл явуулна (bankTx.js).
 // Урьдчилсан нөхцөл: Gmail дээр IMAP асаах + App Password (2FA шаардана).
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { parseTransactionBody, hasAmount, stripHtml, extractBalance } from './bankParser.js';
-import { notifyTransaction } from './discord.js';
+import { parseTransactionBody, hasAmount, stripHtml, extractBalance, isOwnTransfer } from './bankParser.js';
+import { recordTransaction } from './bankTx.js';
 
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
@@ -80,14 +80,20 @@ async function checkInbox() {
           const parsed = await simpleParser(msg.source);
           const text = await extractText(parsed);
           const base = parseTransactionBody(text);
+          // Улаанбаатарын цагаар огноо, цаг
+          const ub = new Date((parsed.date ? new Date(parsed.date) : new Date()).getTime() + 8 * 3600 * 1000).toISOString();
           const tx = {
             ...base,
-            date: parsed.date ? new Date(parsed.date).toISOString().slice(0, 10) : '',
+            date: ub.slice(0, 10),
+            time: ub.slice(11, 16),
             balance: extractBalance(text),
+            ownTransfer: isOwnTransfer(text),
             parsed: base.amount != null,
             subject: (parsed.subject || '').trim(),
+            // Нэг и-мэйлийг хоёр удаа бүртгэхгүйн тулд
+            key: parsed.messageId || `${ub}|${base.amount}|${base.description}`,
           };
-          await notifyTransaction(tx);
+          await recordTransaction(tx);
         } catch (err) {
           console.error('Gmail нэг и-мэйл боловсруулах алдаа:', err.message);
         }
