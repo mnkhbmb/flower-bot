@@ -639,8 +639,13 @@ export async function getPeriodReport(from, to) {
     return date && date >= from && date <= to;
   });
 
-  const acc = { ...empty, count: inRange.length };
+  const acc = { ...empty, count: inRange.length, byDay: {} };
   for (const r of inRange) {
+    // Өдөр бүрийн Данс / Пос — банктай өдрөөр тулгахад
+    const day = String(r.get('Огноо')).trim();
+    const bd = acc.byDay[day] || (acc.byDay[day] = { dans: 0, pos: 0 });
+    bd.dans += num(r.get('Данс'));
+    bd.pos  += num(r.get('Пос'));
     acc.niit    += num(r.get('Нийт орлого'));
     acc.belen   += num(r.get('Бэлэн'));
     acc.dans    += num(r.get('Данс'));
@@ -825,7 +830,8 @@ export async function updateTransaction(rowNumber, { category, person }) {
 // "Өөрийн данс хооронд" шилжүүлгийг нийлбэрт оруулахгүй.
 export async function getTransactionTotals(from, to) {
   const d = await ensureLoaded();
-  const out = { from, to, count: 0, income: 0, expense: 0, incomeBy: {}, expenseBy: {} };
+  // salesByBank / salesByDay — "Борлуулалт" орлогыг банкаар (хаалттай тулгахад)
+  const out = { from, to, count: 0, income: 0, expense: 0, incomeBy: {}, expenseBy: {}, salesByBank: {}, salesByDay: {} };
   const sheet = findSheet(d, 'Гүйлгээ');
   if (!sheet) return out;
   for (const r of await sheet.getRows()) {
@@ -833,7 +839,16 @@ export async function getTransactionTotals(from, to) {
     if (!tx.date || tx.date < from || tx.date > to || tx.category === 'Өөрийн данс хооронд') continue;
     out.count++;
     const cat = tx.category || 'Бусад';
-    if (tx.txType === 'Орлого') { out.income += tx.amount; out.incomeBy[cat] = (out.incomeBy[cat] || 0) + tx.amount; }
+    if (tx.txType === 'Орлого') {
+      out.income += tx.amount;
+      out.incomeBy[cat] = (out.incomeBy[cat] || 0) + tx.amount;
+      if (cat === 'Борлуулалт') {
+        const bank = tx.bank || 'Бусад';
+        out.salesByBank[bank] = (out.salesByBank[bank] || 0) + tx.amount;
+        const day = out.salesByDay[tx.date] || (out.salesByDay[tx.date] = {});
+        day[bank] = (day[bank] || 0) + tx.amount;
+      }
+    }
     else { out.expense += tx.amount; out.expenseBy[cat] = (out.expenseBy[cat] || 0) + tx.amount; }
   }
   return out;

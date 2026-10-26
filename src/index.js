@@ -5,7 +5,7 @@ import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
-import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder } from './services/discord.js';
+import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder, sendTulgaltReport } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
 import { startYahooPoller } from './services/yahoo.js';
 import { wasSentByBot } from './services/messenger.js';
@@ -177,6 +177,18 @@ cron.schedule('0 4 10,25 * *', async () => {
     await sendSalaryReminder();
   } catch (err) {
     console.error('Цалин сануулга алдаа:', err);
+  }
+});
+
+// --- CRON: сарын 11, 26-нд 10:00-д дансны тулгалт (#цалин) ---
+// Цалингийн хугацаа (10/25) дууссаны маргааш өглөө — Пос-ын мөнгө банкинд орсны дараа.
+// UTC+8 → 02:00 UTC = 10:00 Улаанбаатар
+cron.schedule('0 2 11,26 * *', async () => {
+  console.log('🔎 Дансны тулгалт илгээж байна...');
+  try {
+    await sendTulgaltReport();
+  } catch (err) {
+    console.error('Тулгалт алдаа:', err);
   }
 });
 

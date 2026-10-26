@@ -92,6 +92,10 @@ const commands = [
       .setMinValue(0).setMaxValue(10000000).setRequired(false))
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('tulgalt')
+    .setDescription('Хаалтын Пос/Данс-ыг банкаар орсонтой тулгах (энэ цалингийн хугацаа)')
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('guilgee')
     .setDescription('Банкны бодит орлого / зарлага (ангиллаар)')
     .addIntegerOption(o => o.setName('honog').setDescription('Сүүлийн хэдэн хоног (default 30)')
@@ -621,6 +625,19 @@ export async function startDiscord() {
       return;
     }
 
+    // /tulgalt — энэ цалингийн хугацааны тулгалт (өнөөдрийг хүртэл)
+    if (interaction.commandName === 'tulgalt') {
+      await interaction.deferReply();
+      try {
+        const { from, to } = currentPeriodSoFar();
+        await interaction.editReply({ embeds: [await buildReconcileEmbed(from, to)] });
+      } catch (err) {
+        console.error('tulgalt error:', err.message);
+        await interaction.editReply('⚠️ Тулгалт гаргахад алдаа гарлаа.');
+      }
+      return;
+    }
+
     // /guilgee — банкны бодит орлого / зарлага
     if (interaction.commandName === 'guilgee') {
       await interaction.deferReply();
@@ -629,7 +646,7 @@ export async function startDiscord() {
         const to = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
         const from = new Date(Date.now() + 8 * 3600 * 1000 - (days - 1) * 86400000).toISOString().slice(0, 10);
         const t = await getTransactionTotals(from, to);
-        await interaction.editReply({ embeds: [bankEmbed(t, await getPeriodReport(from, to).catch(() => null))] });
+        await interaction.editReply({ embeds: [bankEmbed(t)] });
       } catch (err) {
         console.error('guilgee error:', err.message);
         await interaction.editReply('⚠️ Гүйлгээний тайлан гаргахад алдаа гарлаа.');
@@ -915,9 +932,8 @@ function txMessage(tx) {
   return { embeds: [embed], components };
 }
 
-// Банкны бодит гүйлгээний нэгтгэл. period (хаалтын тайлан) өгвөл хаалтаар бүртгэсэн
-// Данс+Пос-той харьцуулж зөрүүг харуулна.
-function bankEmbed(t, period) {
+// Банкны бодит гүйлгээний нэгтгэл (ангиллаар). Хаалттай тулгалт — reconcileEmbed.
+function bankEmbed(t) {
   const mn = n => `${Math.round(n).toLocaleString()}₮`;
   const list = by => Object.entries(by)
     .sort((x, y) => y[1] - x[1])
@@ -937,23 +953,93 @@ function bankEmbed(t, period) {
     .setFooter({ text: `${t.count} гүйлгээ · өөрийн данс хоорондын шилжүүлгийг тооцоогүй` })
     .setTimestamp();
 
-  if (period && period.count) {
-    // Пос-оор орсон мөнгөнөөс банк шимтгэл (default 1%) хасаад данс руу хийдэг
-    const feePct = Number(process.env.POS_FEE_PERCENT ?? 1) || 0;
-    const posFee = Math.round(period.pos * feePct / 100);
-    const expected = period.dans + period.pos - posFee;
-    const sales = t.incomeBy['Борлуулалт'] || 0;
-    const diff = Math.round(sales - expected);
-    embed.addFields({
-      name: '🔎 Хаалттай тулгалт',
-      value: `Хаалтаар бүртгэсэн Данс + Пос: ${mn(period.dans + period.pos)}\n` +
-        `Посын шимтгэл (${feePct}%): -${mn(posFee)}\n` +
-        `Банкаар орох ёстой: ${mn(expected)}\nБанкаар орсон борлуулалт: ${mn(sales)}\n` +
-        (Math.abs(diff) < 100 ? '✅ Таарч байна' : `Зөрүү: **${diff > 0 ? '+' : ''}${mn(diff)}**`),
-      inline: false,
-    });
-  }
   return embed;
+}
+
+// ===== Дансны тулгалт =====
+// Хаалтын Пос → ХасБанкаар (банк шимтгэл хасаад) орно, Данс → Хаан банкаар бүтнээрээ орно.
+const POS_BANK = 'ХасБанк';
+const DANS_BANK = 'Хаан банк';
+const posFeePct = () => Number(process.env.POS_FEE_PERCENT ?? 1) || 0;
+
+// Улаанбаатарын өнөөдөр (YYYY-MM-DD) ба тооцоолох туслах
+function ubToday() {
+  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function ymd(y, m, d) {
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toISOString().slice(0, 10);
+}
+
+// Саяхан дууссан цалингийн хугацаа (11, 26-нд дуудна): 11 → өмнөх сарын 25 ~ 10, 26 → 10 ~ 25
+function lastEndedPeriod() {
+  const [y, m, d] = ubToday().split('-').map(Number);
+  if (d >= 11 && d <= 25) return { from: ymd(y, m - 1, 25), to: ymd(y, m, 10) };
+  if (d >= 26) return { from: ymd(y, m, 10), to: ymd(y, m, 25) };
+  return { from: ymd(y, m - 1, 10), to: ymd(y, m - 1, 25) };
+}
+
+// Одоо явж буй хугацааны эхнээс өнөөдрийг хүртэл (/tulgalt)
+function currentPeriodSoFar() {
+  const today = ubToday();
+  const [y, m, d] = today.split('-').map(Number);
+  const from = d <= 10 ? ymd(y, m - 1, 25) : d <= 25 ? ymd(y, m, 10) : ymd(y, m, 25);
+  return { from, to: today };
+}
+
+async function buildReconcileEmbed(from, to) {
+  const [period, t] = await Promise.all([getPeriodReport(from, to), getTransactionTotals(from, to)]);
+  const mn = n => `${Math.round(n).toLocaleString()}₮`;
+  const fee = posFeePct();
+  const mark = diff => (Math.abs(diff) < 100 ? '✅' : `⚠️ ${diff > 0 ? '+' : ''}${mn(diff)}`);
+
+  const posFee = Math.round(period.pos * fee / 100);
+  const posExpected = period.pos - posFee;
+  const xac = t.salesByBank[POS_BANK] || 0;
+  const khan = t.salesByBank[DANS_BANK] || 0;
+  const posDiff = Math.round(xac - posExpected);
+  const dansDiff = Math.round(khan - period.dans);
+
+  // Өдөр бүрээр: хаалтын өдөр болон банкны өдрийг нэгтгэнэ
+  const days = [...new Set([...Object.keys(period.byDay || {}), ...Object.keys(t.salesByDay)])].sort();
+  const lines = days.map(day => {
+    const h = (period.byDay || {})[day] || { dans: 0, pos: 0 };
+    const b = t.salesByDay[day] || {};
+    const p = Math.round((b[POS_BANK] || 0) - h.pos * (1 - fee / 100));
+    const dn = Math.round((b[DANS_BANK] || 0) - h.dans);
+    return `\`${day.slice(5)}\` Пос ${mark(p)} · Данс ${mark(dn)}`;
+  });
+  let daily = lines.join('\n') || 'Энэ хугацаанд бүртгэл алга.';
+  if (daily.length > 3500) daily = daily.slice(0, 3500) + '\n…';
+
+  const allOk = Math.abs(posDiff) < 100 && Math.abs(dansDiff) < 100;
+  return new EmbedBuilder()
+    .setColor(allOk ? 0x2ECC71 : 0xE67E22)
+    .setTitle(`🔎 Дансны тулгалт — ${from} ~ ${to}`)
+    .setDescription(`**Өдрөөр**\n${daily}`)
+    .addFields(
+      {
+        name: `💳 Пос → ${POS_BANK}`,
+        value: `Хаалтаар: ${mn(period.pos)}\nШимтгэл ${fee}%: -${mn(posFee)}\nОрох ёстой: ${mn(posExpected)}\n` +
+          `Орсон: **${mn(xac)}**\n${Math.abs(posDiff) < 100 ? '✅ Таарч байна' : `⚠️ Зөрүү: **${posDiff > 0 ? '+' : ''}${mn(posDiff)}**`}`,
+        inline: true,
+      },
+      {
+        name: `🏦 Данс → ${DANS_BANK}`,
+        value: `Хаалтаар: ${mn(period.dans)}\nОрох ёстой: ${mn(period.dans)}\n\n` +
+          `Орсон: **${mn(khan)}**\n${Math.abs(dansDiff) < 100 ? '✅ Таарч байна' : `⚠️ Зөрүү: **${dansDiff > 0 ? '+' : ''}${mn(dansDiff)}**`}`,
+        inline: true,
+      },
+    )
+    .setFooter({ text: '+ = банкаар илүү орсон, − = дутуу. Пос-ын мөнгө маргааш нь орвол тэр 2 өдөрт зөрүү харагдана — нийт дүнг харна уу.' })
+    .setTimestamp();
+}
+
+// Сарын 11, 26-ны өглөө (cron) — саяхан дууссан цалингийн хугацааны тулгалт #цалин руу
+export async function sendTulgaltReport() {
+  const channel = await client.channels.fetch(process.env.DISCORD_SALARY_CHANNEL_ID);
+  const { from, to } = lastEndedPeriod();
+  await channel.send({ embeds: [await buildReconcileEmbed(from, to)] });
 }
 
 // Өдрийн тайлангийн embed
@@ -1073,7 +1159,7 @@ async function buildSalaryEmbed(from, to, { save = false } = {}) {
   // Банкны бодит гүйлгээ (Gmail-ээс автоматаар) — бүртгэл байвал л
   try {
     const t = await getTransactionTotals(from, to);
-    if (t.count) financeEmbeds.push(bankEmbed(t, period));
+    if (t.count) financeEmbeds.push(bankEmbed(t));
   } catch (err) {
     console.error('Банкны гүйлгээ унших алдаа:', err.message);
   }
