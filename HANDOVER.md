@@ -104,6 +104,7 @@ Facebook Messenger + Discord + Google Sheets-тэй холбож автомат�
 | `YAHOO_USER`, `YAHOO_APP_PASSWORD` | Хаан банкны мэдэгдэл ирдэг Yahoo хаяг, түүний App Password |
 | `YAHOO_SHOP_ACCOUNT` | Дэлгүүрийн Хаан дансны дугаар — зөвхөн энэ дансны гүйлгээг авна (заавал) |
 | `YAHOO_FROM`, `YAHOO_FOLDER` | Илгээгчийн хаягийн үг (default khanbank), хавтас (default INBOX) |
+| `POS_FEE_PERCENT` | Посын шимтгэл % — хаалттай тулгахад (default 1) |
 | `BANK_OWN_ACCOUNTS` | Дэлгүүрийн өөрийн дансны дугаарууд, таслалаар (дотоод шилжүүлгийг тооцохгүй) |
 | `DISCORD_BARAA_ROLE_ID` | 7 хоногийн бараа таталтын сануулгад mention хийх role (заавал биш) |
 

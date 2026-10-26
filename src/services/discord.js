@@ -938,13 +938,18 @@ function bankEmbed(t, period) {
     .setTimestamp();
 
   if (period && period.count) {
-    const recorded = period.dans + period.pos;
+    // Пос-оор орсон мөнгөнөөс банк шимтгэл (default 1%) хасаад данс руу хийдэг
+    const feePct = Number(process.env.POS_FEE_PERCENT ?? 1) || 0;
+    const posFee = Math.round(period.pos * feePct / 100);
+    const expected = period.dans + period.pos - posFee;
     const sales = t.incomeBy['Борлуулалт'] || 0;
-    const diff = sales - recorded;
+    const diff = Math.round(sales - expected);
     embed.addFields({
       name: '🔎 Хаалттай тулгалт',
-      value: `Хаалтаар бүртгэсэн Данс + Пос: ${mn(recorded)}\nБанкаар орсон борлуулалт: ${mn(sales)}\n` +
-        (diff === 0 ? '✅ Таарч байна' : `Зөрүү: **${diff > 0 ? '+' : ''}${mn(diff)}**`),
+      value: `Хаалтаар бүртгэсэн Данс + Пос: ${mn(period.dans + period.pos)}\n` +
+        `Посын шимтгэл (${feePct}%): -${mn(posFee)}\n` +
+        `Банкаар орох ёстой: ${mn(expected)}\nБанкаар орсон борлуулалт: ${mn(sales)}\n` +
+        (Math.abs(diff) < 100 ? '✅ Таарч байна' : `Зөрүү: **${diff > 0 ? '+' : ''}${mn(diff)}**`),
       inline: false,
     });
   }
