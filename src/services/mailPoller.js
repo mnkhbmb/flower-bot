@@ -137,13 +137,15 @@ async function checkMailbox(opts, state) {
           continue;
         }
         if (opts.accept && !opts.accept(text)) {
-          // Гарчгийг л харуулна — дансны дугаарын бичлэг өөр байвал олоход тусална
-          console.log(`${opts.name}: дансны дугаар таарсангүй — "${(parsed.subject || '').slice(0, 60)}"`);
+          // Шүүлтгүй уншиж байгаа үед бусад захидлын гарчгийг ч логлохгүй
+          if (opts.search) console.log(`${opts.name}: дансны дугаар таарсангүй — "${(parsed.subject || '').slice(0, 60)}"`);
           skipped++; done = uid; continue;
         }
         try {
           const extra = typeof opts.overrides === 'function' ? opts.overrides(text) : opts.overrides;
           await recordTransaction({ ...buildTx(parsed, text), ...extra });
+          // Банкны илгээгчийн хаяг (дараа нь YAHOO_FROM-д тавьж хурдасгах боломжтой)
+          console.log(`✅ ${opts.name}: гүйлгээ бүртгэлээ — илгээгч ${parsed.from?.value?.[0]?.address || '?'}`);
           done = uid;
         } catch (err) {
           // Sheets/Discord түр алдаа — дараагийн шалгалтаар дахин оролдоно

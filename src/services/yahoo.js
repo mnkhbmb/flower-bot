@@ -10,7 +10,9 @@ export function startYahooPoller() {
   const user = process.env.YAHOO_USER;
   const pass = process.env.YAHOO_APP_PASSWORD;
   const accounts = shopAccounts();
-  const from = process.env.YAHOO_FROM || 'khanbank';
+  // Илгээгчийн хаягаар шүүх нь заавал биш (Хаан банкны хаяг "khanbank" гэж агуулдаггүй байсан).
+  // Хоосон бол бүх шинэ и-мэйлийг уншаад ДАНСНЫ ДУГААРААР шүүнэ — бусад захидал хадгалагдахгүй.
+  const from = (process.env.YAHOO_FROM || '').trim();
   if (!user || !pass) {
     console.log('ℹ️ Yahoo poller идэвхгүй (YAHOO_USER / YAHOO_APP_PASSWORD тохируулаагүй)');
     return;
@@ -20,12 +22,12 @@ export function startYahooPoller() {
     console.error('❌ Yahoo poller эхэлсэнгүй: YAHOO_SHOP_ACCOUNT (дэлгүүрийн Хаан дансны дугаар) тохируулаагүй');
     return;
   }
-  console.log(`📧 Yahoo poller эхэллээ — "${from}"-аас ирсэн, ${accounts.map(a => `${a.label} (*${a.id.slice(-4)})`).join(', ')} дансны гүйлгээ`);
+  console.log(`📧 Yahoo poller эхэллээ — ${from ? `"${from}"-аас ирсэн, ` : ''}${accounts.map(a => `${a.label} (*${a.id.slice(-4)})`).join(', ')} дансны гүйлгээ`);
   startMailPoller({
     name: 'Yahoo', host: 'imap.mail.yahoo.com', user, pass,
     folder: process.env.YAHOO_FOLDER || 'INBOX',
     stateKey: 'yahoo_last_uid',
-    search: { from },
+    search: from ? { from } : undefined,
     accept: text => accounts.some(a => mentionsAccount(text, a.id)),
     // Аль данснаас/данс руу болсныг тэмдэглэнэ — тулгалт, данс тус бүрийн тайланд
     overrides: text => ({
