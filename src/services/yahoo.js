@@ -4,7 +4,7 @@
 // Жнь YAHOO_SHOP_ACCOUNT="5011111111:Данс,5022222222:Бэлэн" (шилжүүлэг авдаг, бэлэн тушаадаг данс).
 // Шууданг зөвхөн уншина (readOnly): "уншсан" тэмдэг тавихгүй, юу ч устгахгүй.
 import { startMailPoller } from './mailPoller.js';
-import { mentionsAccount, shopAccounts } from './bankParser.js';
+import { mentionsAccount, shopAccounts, parseKhan, khanDirection } from './bankParser.js';
 
 export function startYahooPoller() {
   const user = process.env.YAHOO_USER;
@@ -30,9 +30,16 @@ export function startYahooPoller() {
     search: from ? { from } : undefined,
     accept: text => accounts.some(a => mentionsAccount(text, a.id)),
     // Аль данснаас/данс руу болсныг тэмдэглэнэ — тулгалт, данс тус бүрийн тайланд
-    overrides: text => ({
-      bank: 'Хаан банк',
-      account: (accounts.find(a => mentionsAccount(text, a.id)) || {}).label || '',
-    }),
+    // Хаан банкны баримтыг Хаан банкны задлагчаар уншиж (дотор нь "Golomt Bank" гэх мэт өөр банкны
+    // нэр байж болно), орлого/зарлагыг манай данс Дт/From эсвэл Кт/To хэсэгт байгаагаар тогтооно.
+    overrides: text => {
+      const acc = accounts.find(a => mentionsAccount(text, a.id));
+      const khan = parseKhan(text);
+      return {
+        ...khan,
+        txType: khanDirection(text, acc?.id) || khan.txType,
+        account: acc?.label || '',
+      };
+    },
   });
 }

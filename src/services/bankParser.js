@@ -95,6 +95,21 @@ export function parseKhan(text) {
   return { bank: 'Хаан банк', txType: detectType(text), amount: parseAmount(text), description };
 }
 
+// Хаан банкны "Шилжүүлгийн баримт": Дт/From (гарсан) ба Кт/To (орсон) хэсэгтэй.
+// Манай данс аль хэсэгт байгаагаар чиглэлийг тогтооно; тодорхойгүй бол null.
+export function khanDirection(text, accountId) {
+  const t = text || '';
+  const kt = t.search(/Кт\s*\/|Kt\s*\/|(^|\s)To(\s|$)/m);
+  const acc = String(accountId || '').replace(/\D/g, '');
+  let at = acc ? t.indexOf(acc) : -1;
+  if (at < 0 && acc.length >= 6) {
+    const m = t.match(new RegExp(`${acc.slice(0, 3)}[*xX•]+${acc.slice(-3)}|[*xX•]{2,}${acc.slice(-4)}(?!\\d)`));
+    at = m ? m.index : -1;
+  }
+  if (kt < 0 || at < 0) return null;
+  return at > kt ? 'Орлого' : 'Зарлага';
+}
+
 // ===== Ерөнхий (бусад банк) =====
 function parseGeneric(text) {
   let description = '—';
