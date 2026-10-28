@@ -770,7 +770,7 @@ export async function getWorkerNames() {
 }
 
 // ===== Банкны гүйлгээ — "Гүйлгээ" tab (байхгүй бол үүсгэнэ) =====
-const TX_HEADERS = ['Огноо', 'Цаг', 'Банк', 'Данс', 'Төрөл', 'Дүн', 'Утга', 'Ангилал', 'Үлдэгдэл', 'Ажилтан', 'Түлхүүр'];
+const TX_HEADERS = ['Огноо', 'Цаг', 'Банк', 'Данс', 'Төрөл', 'Дүн', 'Утга', 'Харилцагч', 'Ангилал', 'Үлдэгдэл', 'Ажилтан', 'Түлхүүр'];
 let txColumnsChecked = false;
 
 async function txSheet(d) {
@@ -800,6 +800,7 @@ function rowToTx(r) {
     txType: String(r.get('Төрөл') || ''),
     amount: num(r.get('Дүн')),
     description: String(r.get('Утга') || ''),
+    counterparty: String(r.get('Харилцагч') || ''),
     category: String(r.get('Ангилал') || ''),
     balance: r.get('Үлдэгдэл') === '' || r.get('Үлдэгдэл') == null ? null : num(r.get('Үлдэгдэл')),
     person: String(r.get('Ажилтан') || ''),
@@ -816,7 +817,7 @@ export async function saveTransaction(tx) {
   }
   const row = await sheet.addRow({
     'Огноо': tx.date, 'Цаг': tx.time || '', 'Банк': tx.bank || '', 'Данс': tx.account || '', 'Төрөл': tx.txType,
-    'Дүн': tx.amount ?? '', 'Утга': tx.description || '', 'Ангилал': tx.category || '',
+    'Дүн': tx.amount ?? '', 'Утга': tx.description || '', 'Харилцагч': tx.counterparty || '', 'Ангилал': tx.category || '',
     'Үлдэгдэл': tx.balance ?? '', 'Ажилтан': tx.person || '', 'Түлхүүр': tx.key || '',
   });
   return { duplicate: false, tx: rowToTx(row) };
@@ -836,6 +837,26 @@ export async function updateTransaction(rowNumber, { category, person }) {
   if (person !== undefined) found.r.set('Ажилтан', person || '');
   await found.r.save();
   return rowToTx(found.r);
+}
+
+// Хугацааны бүх гүйлгээ (цалингийн олголтыг тулгахад)
+export async function listTransactions(from, to) {
+  const d = await ensureLoaded();
+  const sheet = findSheet(d, 'Гүйлгээ');
+  if (!sheet) return [];
+  return (await sheet.getRows()).map(rowToTx).filter(tx => tx.date && tx.date >= from && tx.date <= to);
+}
+
+// Банкны харилцагчийн нэр → ажилтан ("Тохиргоо" tab, "harilcagch:ЗОЛЗАЯА" = Амина).
+// Discord дээр нэг удаа сонгоход дараагийн шилжүүлгээс автоматаар танина.
+const normParty = name => String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+export async function getCounterpartyPerson(name) {
+  const key = normParty(name);
+  return key ? (await getSetting('harilcagch:' + key)) || null : null;
+}
+export async function setCounterpartyPerson(name, person) {
+  const key = normParty(name);
+  if (key) await setSetting('harilcagch:' + key, person);
 }
 
 // Хугацааны банкны гүйлгээг нэгтгэх → { count, income, expense, incomeBy, expenseBy }

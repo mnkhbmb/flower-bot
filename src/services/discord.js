@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals, listTransactions, setCounterpartyPerson } from './sheets.js';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, findPerson } from '../config/bankCategories.js';
 import { shopAccounts } from './bankParser.js';
 import { readInvoice } from './vision.js';
@@ -19,6 +19,14 @@ const DIRECTORS = [
 export function salaryPeople() {
   return [...WORKERS, ...DIRECTORS.map(d => d.name)];
 }
+
+// Ажилтан сонгох цэсэнд: тогтмол жагсаалт + Ирц дээрх нэрс
+async function allPeople() {
+  let names = [];
+  try { names = await getWorkerNames(); } catch { /* sheet уншиж чадахгүй бол тогтмол жагсаалт */ }
+  return [...new Set([...salaryPeople(), ...names])].slice(0, 25);
+}
+const PAY_CATS = ['Цалин', 'Урьдчилгаа'];
 
 // Командууд бүртгэх
 const commands = [
@@ -169,29 +177,63 @@ export async function startDiscord() {
           return;
         }
         const old = found.tx;
+        const people = await allPeople();
         let person = old.person;
         let note = '';
         if (old.category === 'Урьдчилгаа' && category !== 'Урьдчилгаа') {
           await removeZeelByTag(`[tx:${row}]`);
           if (old.person) note = `↩️ Цалингаас хасахаа болилоо: **${old.person}**`;
-          person = '';
         }
+        // Цалин/Урьдчилгаа бол хэнд өгснийг хадгална (утга эсвэл хүлээн авагчийн нэрээс)
+        if (!PAY_CATS.includes(category)) person = '';
+        else if (!person) person = findPerson(`${old.description} ${old.counterparty}`, people) || '';
         if (category === 'Урьдчилгаа' && old.category !== 'Урьдчилгаа') {
-          const people = [...new Set([...salaryPeople(), ...(await getWorkerNames())])];
-          person = findPerson(old.description, people) || '';
           if (person && old.amount > 0) {
             await saveZeel({ name: person, amount: old.amount, date: old.date, note: `Банк: ${old.description || '—'} [tx:${row}]` });
             note = `💸 Цалингаас хасна: **${person}** — ${old.amount.toLocaleString()}₮`;
           } else {
-            note = '⚠️ Утгаас ажилтны нэр олдсонгүй. Хэнийх болохыг `/zeel`-ээр бүртгэнэ үү.';
+            note = '👩 Хэнийх болохыг доорх цэснээс сонгоно уу.';
           }
         }
         const tx = await updateTransaction(row, { category, person });
-        await interaction.editReply(txMessage(tx));
+        await interaction.editReply(txMessage(tx, people));
         if (note) await interaction.followUp({ content: note, ephemeral: true });
       } catch (err) {
         console.error('txcat error:', err.message);
         await interaction.followUp({ content: '⚠️ Ангилал солиход алдаа гарлаа.', ephemeral: true }).catch(() => {});
+      }
+      return;
+    }
+
+    // Цалин/урьдчилгаа хэнд өгснийг сонгох — хүлээн авагчийн нэрийг санаж дараа нь автоматаар танина
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('txperson:')) {
+      await interaction.deferUpdate();
+      try {
+        const row = Number(interaction.customId.split(':')[1]);
+        const person = interaction.values[0];
+        const found = await getTransaction(row);
+        if (!found) {
+          await interaction.followUp({ content: '⚠️ Гүйлгээ sheet-ээс олдсонгүй.', ephemeral: true });
+          return;
+        }
+        const old = found.tx;
+        if (old.category === 'Урьдчилгаа') {
+          await removeZeelByTag(`[tx:${row}]`);
+          if (old.amount > 0) {
+            await saveZeel({ name: person, amount: old.amount, date: old.date, note: `Банк: ${old.description || '—'} [tx:${row}]` });
+          }
+        }
+        const tx = await updateTransaction(row, { person });
+        if (old.counterparty) await setCounterpartyPerson(old.counterparty, person);
+        await interaction.editReply(txMessage(tx, await allPeople()));
+        await interaction.followUp({
+          content: `✅ **${person}**${old.category === 'Урьдчилгаа' ? ' — цалингаас хасна' : ''}.` +
+            (old.counterparty ? ` Дараа нь **${old.counterparty}** руу шилжүүлбэл автоматаар танина.` : ''),
+          ephemeral: true,
+        });
+      } catch (err) {
+        console.error('txperson error:', err.message);
+        await interaction.followUp({ content: '⚠️ Хадгалахад алдаа гарлаа.', ephemeral: true }).catch(() => {});
       }
       return;
     }
@@ -203,10 +245,10 @@ export async function startDiscord() {
         const row = Number(interaction.customId.split(':')[1]);
         const found = await getTransaction(row);
         await removeZeelByTag(`[tx:${row}]`);
-        const tx = await updateTransaction(row, { category: 'Бусад зарлага', person: '' });
-        if (tx) await interaction.editReply(txMessage(tx));
+        const tx = await updateTransaction(row, { category: 'Цалин' });
+        if (tx) await interaction.editReply(txMessage(tx, await allPeople()));
         await interaction.followUp({
-          content: `↩️ Цалингаас хасахаа болилоо${found?.tx.person ? `: **${found.tx.person}**` : ''}. Ангиллыг цэснээс сонгож болно.`,
+          content: `↩️ Цалингаас хасахаа болиод "Цалин" гэж бүртгэлээ${found?.tx.person ? `: **${found.tx.person}**` : ''}. Өөр бол ангиллыг цэснээс сольно уу.`,
           ephemeral: true,
         });
       } catch (err) {
@@ -867,7 +909,7 @@ export async function notifyTransaction(tx) {
   }
   try {
     const channel = await client.channels.fetch(channelId);
-    await channel.send(txMessage(tx));
+    await channel.send(txMessage(tx, await allPeople()));
   } catch (err) {
     // Private суваг бол ботыг тэр сувагт нэмээгүй үед "Missing Access" гарна
     console.error(`❌ Гүйлгээний мэдэгдэл явуулж чадсангүй (суваг ${channelId}): ${err.message}. ` +
@@ -877,7 +919,7 @@ export async function notifyTransaction(tx) {
 
 // Гүйлгээний мэдэгдэл: embed + ангилал солих цэс (+ урьдчилгаа бол "хасахгүй" товч).
 // Ангилал солиход ч энэ функцээр дахин зурна.
-function txMessage(tx) {
+function txMessage(tx, people = salaryPeople()) {
   const isIncome = tx.txType === 'Орлого';
   const amountStr = tx.amount
     ? `**${isIncome ? '+' : '-'}${tx.amount.toLocaleString()}₮**`
@@ -891,6 +933,9 @@ function txMessage(tx) {
       { name: '🏦 Банк', value: `${tx.bank || '—'}${tx.account ? ` · ${tx.account}` : ''}`, inline: true },
       { name: '📅 Огноо', value: `${tx.date || '—'}${tx.time ? ` ${tx.time}` : ''}`, inline: true },
       { name: '📝 Утга', value: (tx.description || '—').slice(0, 1000), inline: false },
+      ...(tx.counterparty
+        ? [{ name: tx.txType === 'Орлого' ? '👤 Илгээгч' : '👤 Хүлээн авагч', value: tx.counterparty.slice(0, 200), inline: true }]
+        : []),
       { name: '🏷️ Ангилал', value: `\`${tx.category || '—'}\``, inline: true },
     )
     .setFooter({ text: `"Гүйлгээ" tab · мөр ${tx.row}` })
@@ -898,6 +943,13 @@ function txMessage(tx) {
 
   if (tx.balance != null) {
     embed.addFields({ name: '🧾 Үлдэгдэл', value: `${tx.balance.toLocaleString()}₮`, inline: true });
+  }
+  if (tx.category === 'Цалин') {
+    embed.addFields({
+      name: '👩 Цалин',
+      value: tx.person ? `**${tx.person}**` : '_Хэнийх вэ? Доорх цэснээс сонгоно уу_',
+      inline: false,
+    });
   }
   const advance = tx.category === 'Урьдчилгаа' && tx.person;
   if (advance) {
@@ -922,6 +974,15 @@ function txMessage(tx) {
         .addOptions(options),
     ),
   ];
+  // Цалин/урьдчилгаа бол хэнд өгснийг сонгох цэс
+  if (PAY_CATS.includes(tx.category) && people.length) {
+    components.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`txperson:${tx.row}`)
+        .setPlaceholder(tx.person ? `👩 ${tx.person} (солих)` : '👩 Хэнд өгсөн бэ?')
+        .addOptions(people.slice(0, 25).map(n => ({ label: n, value: n, default: n === tx.person }))),
+    ));
+  }
   if (advance) {
     components.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -996,16 +1057,35 @@ function currentPeriodSoFar() {
   return { from, to: today };
 }
 
+// Хугацааны цэвэр цалин (зээл хассан) — нэр → дүн. buildSalaryEmbed-тэй ижил тооцоо.
+async function netSalaries(from, to) {
+  const report = await getSalaryReport(from, to, DIRECTORS.map(d => d.name));
+  const advances = await getAdvances(from, to);
+  const out = {};
+  for (const [name, data] of Object.entries(report.workers)) out[name] = data.salary - (advances[name] || 0);
+  for (const d of DIRECTORS) out[d.name] = d.amount - (advances[d.name] || 0);
+  return out;
+}
+
+function addDays(date, n) {
+  return new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+}
+
 async function buildReconcileEmbed(from, to) {
   const [period, t] = await Promise.all([getPeriodReport(from, to), getTransactionTotals(from, to)]);
   const mn = n => `${Math.round(n).toLocaleString()}₮`;
   const fee = posFeePct();
   const mark = diff => (Math.abs(diff) < 100 ? '✅' : `⚠️ ${diff > 0 ? '+' : ''}${mn(diff)}`);
+  const verdict = diff => (Math.abs(diff) < 100 ? '✅ Таарч байна' : `⚠️ Зөрүү: **${diff > 0 ? '+' : ''}${mn(diff)}**`);
 
   // Yahoo-д "Данс", "Бэлэн" гэж нэрлэсэн Хаан данс байвал тэдгээрээр, эс бол банкаар нь
   const labels = shopAccounts().map(a => a.label);
   const DANS_KEY = labels.find(l => /данс/i.test(l)) || DANS_BANK;
   const CASH_KEY = labels.find(l => /бэлэн/i.test(l)) || null;
+  // Хаан банк орлогын мэдэгдэл явуулдаггүй — орлого огт бүртгэгдээгүй бол тулгахгүй
+  // (эс бол бүх Данс "дутуу" мэт харагдана)
+  const dansTracked = (t.byAccount[DANS_KEY]?.in || 0) > 0;
+  const cashTracked = CASH_KEY && (t.byAccount[CASH_KEY]?.in || 0) > 0;
 
   const posFee = Math.round(period.pos * fee / 100);
   const posExpected = period.pos - posFee;
@@ -1021,36 +1101,71 @@ async function buildReconcileEmbed(from, to) {
     const b = t.salesByDay[day] || {};
     const p = Math.round((b[POS_BANK] || 0) - h.pos * (1 - fee / 100));
     const dn = Math.round((b[DANS_KEY] || 0) - h.dans);
-    return `\`${day.slice(5)}\` Пос ${mark(p)} · Данс ${mark(dn)}`;
+    return `\`${day.slice(5)}\` Пос ${mark(p)}${dansTracked ? ` · Данс ${mark(dn)}` : ''}`;
   });
   let daily = lines.join('\n') || 'Энэ хугацаанд бүртгэл алга.';
-  if (daily.length > 3500) daily = daily.slice(0, 3500) + '\n…';
+  if (daily.length > 3000) daily = daily.slice(0, 3000) + '\n…';
 
-  const allOk = Math.abs(posDiff) < 100 && Math.abs(dansDiff) < 100;
+  // ----- Цалингийн олголт: бодсон цалин ↔ банкаар шилжүүлсэн (Цалин ангилал) -----
+  // Цалинг хугацааны сүүлийн өдөр эсвэл дараа нь өгдөг тул тэр орчмын гүйлгээг харна.
+  let salaryText = '';
+  let salaryOk = true;
+  try {
+    const owed = await netSalaries(from, to);
+    const pays = (await listTransactions(addDays(to, -1), addDays(to, 5)))
+      .filter(tx => tx.txType === 'Зарлага' && tx.category === 'Цалин');
+    const paid = {};
+    let unknown = 0;
+    for (const tx of pays) {
+      if (!tx.person) { unknown += tx.amount; continue; }
+      const key = Object.keys(owed).find(n => n.toLowerCase() === tx.person.toLowerCase()) || tx.person;
+      paid[key] = (paid[key] || 0) + tx.amount;
+    }
+    const names = [...new Set([...Object.keys(owed), ...Object.keys(paid)])];
+    const rows = names.map(n => {
+      const diff = Math.round((paid[n] || 0) - (owed[n] || 0));
+      if (Math.abs(diff) >= 100) salaryOk = false;
+      return `**${n}**: бодсон ${mn(owed[n] || 0)} · шилжүүлсэн ${mn(paid[n] || 0)} ${mark(diff)}`;
+    });
+    if (unknown > 0) {
+      salaryOk = false;
+      rows.push(`❓ Хэнийх нь тодорхойгүй цалин: **${mn(unknown)}** — #орлого-зарлага-бүртгэл дээр сонгоно уу`);
+    }
+    salaryText = rows.join('\n');
+  } catch (err) {
+    console.error('Цалингийн тулгалт алдаа:', err.message);
+  }
+
+  const allOk = Math.abs(posDiff) < 100 && (!dansTracked || Math.abs(dansDiff) < 100) && salaryOk;
   const embed = new EmbedBuilder()
     .setColor(allOk ? 0x2ECC71 : 0xE67E22)
-    .setTitle(`🔎 Дансны тулгалт — ${from} ~ ${to}`)
-    .setDescription(`**Өдрөөр**\n${daily}`)
-    .addFields(
-      {
-        name: `💳 Пос → ${POS_BANK}`,
-        value: `Хаалтаар: ${mn(period.pos)}\nШимтгэл ${fee}%: -${mn(posFee)}\nОрох ёстой: ${mn(posExpected)}\n` +
-          `Орсон: **${mn(xac)}**\n${Math.abs(posDiff) < 100 ? '✅ Таарч байна' : `⚠️ Зөрүү: **${posDiff > 0 ? '+' : ''}${mn(posDiff)}**`}`,
-        inline: true,
-      },
-      {
-        name: `🏦 Данс → ${DANS_KEY === DANS_BANK ? DANS_BANK : `Хаан (${DANS_KEY})`}`,
-        value: `Хаалтаар: ${mn(period.dans)}\nОрох ёстой: ${mn(period.dans)}\n\n` +
-          `Орсон: **${mn(khan)}**\n${Math.abs(dansDiff) < 100 ? '✅ Таарч байна' : `⚠️ Зөрүү: **${dansDiff > 0 ? '+' : ''}${mn(dansDiff)}**`}`,
-        inline: true,
-      },
-    )
-    .setFooter({ text: '+ = банкаар илүү орсон, − = дутуу. Пос-ын мөнгө маргааш нь орвол тэр 2 өдөрт зөрүү харагдана — нийт дүнг харна уу.' })
+    .setTitle(`🔎 Тулгалт — ${from} ~ ${to}`)
+    .setDescription(`**Пос${dansTracked ? ', Данс' : ''} өдрөөр**\n${daily}`)
+    .addFields({
+      name: `💳 Пос → ${POS_BANK}`,
+      value: `Хаалтаар: ${mn(period.pos)}\nШимтгэл ${fee}%: -${mn(posFee)}\nОрох ёстой: ${mn(posExpected)}\n` +
+        `Орсон: **${mn(xac)}**\n${verdict(posDiff)}`,
+      inline: true,
+    })
+    .setFooter({ text: '+ = илүү, − = дутуу. Пос-ын мөнгө маргааш нь орвол тэр 2 өдөрт зөрүү харагдана — нийт дүнг харна уу.' })
     .setTimestamp();
 
-  // Бэлэн: хаалтын бэлэн орлогоос хаалтын зарлагыг (бэлнээр төлсөн) хасаад үлдсэн нь
-  // бэлэн дансанд тушаагдах ёстой. Тушаалт өдөр бүр биш байж болох тул мэдээлэл болгон харуулна.
-  if (CASH_KEY) {
+  if (dansTracked) {
+    embed.addFields({
+      name: `🏦 Данс → Хаан (${DANS_KEY})`,
+      value: `Хаалтаар: ${mn(period.dans)}\nОрох ёстой: ${mn(period.dans)}\n\nОрсон: **${mn(khan)}**\n${verdict(dansDiff)}`,
+      inline: true,
+    });
+  } else {
+    embed.addFields({
+      name: '🏦 Данс (Хаан банк)',
+      value: `Хаалтаар: ${mn(period.dans)}\n_Хаан банк орлогын и-мэйл явуулдаггүй тул банктай тулгах боломжгүй._`,
+      inline: true,
+    });
+  }
+
+  // Бэлэн: хаалтын бэлэн орлогоос хаалтын зарлагыг хасаад үлдсэн нь бэлэн дансанд тушаагдах ёстой
+  if (cashTracked) {
     const shouldDeposit = period.belen - period.zarlaga;
     const deposited = t.byAccount[CASH_KEY]?.in || 0;
     const left = Math.round(shouldDeposit - deposited);
@@ -1060,6 +1175,14 @@ async function buildReconcileEmbed(from, to) {
         `Тушаах ёстой: ${mn(shouldDeposit)}\nДансанд орсон: **${mn(deposited)}**\n` +
         (Math.abs(left) < 100 ? '✅ Бүгд тушаагдсан'
           : left > 0 ? `🟡 Тушаагаагүй (гарт): **${mn(left)}**` : `⚠️ Илүү орсон: **${mn(-left)}**`),
+      inline: false,
+    });
+  }
+
+  if (salaryText) {
+    embed.addFields({
+      name: `💵 Цалингийн олголт (${addDays(to, -1)} ~ ${addDays(to, 5)}-ны шилжүүлэг)`,
+      value: salaryText.slice(0, 1000),
       inline: false,
     });
   }

@@ -110,6 +110,23 @@ export function khanDirection(text, accountId) {
   return at > kt ? 'Орлого' : 'Зарлага';
 }
 
+// Хаан банкны баримтаас илгээгч (Дт/From) ба хүлээн авагчийн (Кт/To) нэр.
+// Нэр нь ТОМ үсгээр бичигддэг ("МӨНХБЯМБА МӨНХБАЯР", "Д*********Н ЗОЛЗАЯА"), шошго нь
+// жижиг үсэгтэй тул хэсэг бүрийн сүүлчийн том үсэгтэй нэрийг авна. Олдохгүй бол ''.
+const NAME_RUN = /[А-ЯЁӨҮ][А-ЯЁӨҮ*.-]+(?:\s+[А-ЯЁӨҮ][А-ЯЁӨҮ*.-]+){0,2}/g;
+export function khanParties(text) {
+  const t = text || '';
+  const kt = t.search(/Кт\s*\/|Kt\s*\//);
+  if (kt < 0) return { from: '', to: '' };
+  const pick = part => {
+    // Мөнгөн дүнгийн бичвэр ("/ Таван мянган төгрөг /") болон шошгыг алгасна
+    const names = (part.match(NAME_RUN) || []).filter(n => n.replace(/[*.-]/g, '').length >= 4);
+    return names.length ? names[names.length - 1].trim() : '';
+  };
+  const end = t.search(/Гүйлгээний утга|Transaction description/);
+  return { from: pick(t.slice(0, kt)), to: pick(t.slice(kt, end > kt ? end : undefined)) };
+}
+
 // ===== Ерөнхий (бусад банк) =====
 function parseGeneric(text) {
   let description = '—';

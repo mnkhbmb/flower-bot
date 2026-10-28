@@ -59,9 +59,10 @@ function nearPayday(date) {
   return [9, 10, 11, 12, 24, 25, 26, 27].includes(day);
 }
 
-// { txType, description, date, ownTransfer } → { category, person }
-// person нь зөвхөн "Урьдчилгаа" үед — цалингаас нь автоматаар хасна.
-export function categorize(tx, people = []) {
+// { txType, description, counterparty, date, ownTransfer } → { category, person }
+// person — Цалин/Урьдчилгаа үед хэнд өгснийг заана (Урьдчилгаа бол цалингаас нь хасна).
+// knownPerson — өмнө нь Discord дээр энэ харилцагчийг сонгосон бол тэр ажилтан.
+export function categorize(tx, people = [], knownPerson = null) {
   const d = (tx.description || '').toLowerCase();
   if (tx.ownTransfer) return { category: 'Өөрийн данс хооронд', person: null };
 
@@ -70,12 +71,13 @@ export function categorize(tx, people = []) {
     return { category: rule ? rule.cat : 'Борлуулалт', person: null };
   }
 
-  const person = findPerson(d, people);
+  // Утгад нэр бичдэггүй тул хүлээн авагчийн нэрээр ч хайна
+  const person = knownPerson || findPerson(`${d} ${tx.counterparty || ''}`, people);
   if (person) {
     const advance = ADVANCE_WORDS.some(w => d.includes(w));
     const salary = SALARY_WORDS.some(w => d.includes(w));
     if (advance || (!salary && !nearPayday(tx.date))) return { category: 'Урьдчилгаа', person };
-    return { category: 'Цалин', person: null };
+    return { category: 'Цалин', person };
   }
   if (SALARY_WORDS.some(w => d.includes(w))) return { category: 'Цалин', person: null };
 
