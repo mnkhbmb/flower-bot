@@ -2,6 +2,7 @@
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder } from 'discord.js';
 import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals } from './sheets.js';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, findPerson } from '../config/bankCategories.js';
+import { shopAccounts } from './bankParser.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -887,7 +888,7 @@ function txMessage(tx) {
     .setTitle(isIncome ? '💵 Шинэ орлого' : '💸 Шинэ зарлага')
     .addFields(
       { name: '💰 Дүн', value: amountStr, inline: true },
-      { name: '🏦 Банк', value: tx.bank || '—', inline: true },
+      { name: '🏦 Банк', value: `${tx.bank || '—'}${tx.account ? ` · ${tx.account}` : ''}`, inline: true },
       { name: '📅 Огноо', value: `${tx.date || '—'}${tx.time ? ` ${tx.time}` : ''}`, inline: true },
       { name: '📝 Утга', value: (tx.description || '—').slice(0, 1000), inline: false },
       { name: '🏷️ Ангилал', value: `\`${tx.category || '—'}\``, inline: true },
@@ -949,6 +950,14 @@ function bankEmbed(t) {
       { name: '🟰 Цэвэр', value: `**${mn(t.income - t.expense)}**`, inline: true },
       { name: 'Орлого (ангиллаар)', value: list(t.incomeBy).slice(0, 1000), inline: false },
       { name: 'Зарлага (ангиллаар)', value: list(t.expenseBy).slice(0, 1000), inline: false },
+      {
+        // Аль данснаас хэдэн төгрөг орж, гарсан бэ
+        name: 'Данс тус бүрээр',
+        value: Object.entries(t.byAccount || {})
+          .map(([k, v]) => `${k}: +${mn(v.in)} / -${mn(v.out)}`)
+          .join('\n').slice(0, 1000) || '—',
+        inline: false,
+      },
     )
     .setFooter({ text: `${t.count} гүйлгээ · өөрийн данс хоорондын шилжүүлгийг тооцоогүй` })
     .setTimestamp();
@@ -993,10 +1002,15 @@ async function buildReconcileEmbed(from, to) {
   const fee = posFeePct();
   const mark = diff => (Math.abs(diff) < 100 ? '✅' : `⚠️ ${diff > 0 ? '+' : ''}${mn(diff)}`);
 
+  // Yahoo-д "Данс", "Бэлэн" гэж нэрлэсэн Хаан данс байвал тэдгээрээр, эс бол банкаар нь
+  const labels = shopAccounts().map(a => a.label);
+  const DANS_KEY = labels.find(l => /данс/i.test(l)) || DANS_BANK;
+  const CASH_KEY = labels.find(l => /бэлэн/i.test(l)) || null;
+
   const posFee = Math.round(period.pos * fee / 100);
   const posExpected = period.pos - posFee;
   const xac = t.salesByBank[POS_BANK] || 0;
-  const khan = t.salesByBank[DANS_BANK] || 0;
+  const khan = t.salesByBank[DANS_KEY] || 0;
   const posDiff = Math.round(xac - posExpected);
   const dansDiff = Math.round(khan - period.dans);
 
@@ -1006,14 +1020,14 @@ async function buildReconcileEmbed(from, to) {
     const h = (period.byDay || {})[day] || { dans: 0, pos: 0 };
     const b = t.salesByDay[day] || {};
     const p = Math.round((b[POS_BANK] || 0) - h.pos * (1 - fee / 100));
-    const dn = Math.round((b[DANS_BANK] || 0) - h.dans);
+    const dn = Math.round((b[DANS_KEY] || 0) - h.dans);
     return `\`${day.slice(5)}\` Пос ${mark(p)} · Данс ${mark(dn)}`;
   });
   let daily = lines.join('\n') || 'Энэ хугацаанд бүртгэл алга.';
   if (daily.length > 3500) daily = daily.slice(0, 3500) + '\n…';
 
   const allOk = Math.abs(posDiff) < 100 && Math.abs(dansDiff) < 100;
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(allOk ? 0x2ECC71 : 0xE67E22)
     .setTitle(`🔎 Дансны тулгалт — ${from} ~ ${to}`)
     .setDescription(`**Өдрөөр**\n${daily}`)
@@ -1025,7 +1039,7 @@ async function buildReconcileEmbed(from, to) {
         inline: true,
       },
       {
-        name: `🏦 Данс → ${DANS_BANK}`,
+        name: `🏦 Данс → ${DANS_KEY === DANS_BANK ? DANS_BANK : `Хаан (${DANS_KEY})`}`,
         value: `Хаалтаар: ${mn(period.dans)}\nОрох ёстой: ${mn(period.dans)}\n\n` +
           `Орсон: **${mn(khan)}**\n${Math.abs(dansDiff) < 100 ? '✅ Таарч байна' : `⚠️ Зөрүү: **${dansDiff > 0 ? '+' : ''}${mn(dansDiff)}**`}`,
         inline: true,
@@ -1033,6 +1047,23 @@ async function buildReconcileEmbed(from, to) {
     )
     .setFooter({ text: '+ = банкаар илүү орсон, − = дутуу. Пос-ын мөнгө маргааш нь орвол тэр 2 өдөрт зөрүү харагдана — нийт дүнг харна уу.' })
     .setTimestamp();
+
+  // Бэлэн: хаалтын бэлэн орлогоос хаалтын зарлагыг (бэлнээр төлсөн) хасаад үлдсэн нь
+  // бэлэн дансанд тушаагдах ёстой. Тушаалт өдөр бүр биш байж болох тул мэдээлэл болгон харуулна.
+  if (CASH_KEY) {
+    const shouldDeposit = period.belen - period.zarlaga;
+    const deposited = t.byAccount[CASH_KEY]?.in || 0;
+    const left = Math.round(shouldDeposit - deposited);
+    embed.addFields({
+      name: `💵 Бэлэн → Хаан (${CASH_KEY})`,
+      value: `Хаалтаар бэлэн: ${mn(period.belen)}\nХаалтын зарлага: -${mn(period.zarlaga)}\n` +
+        `Тушаах ёстой: ${mn(shouldDeposit)}\nДансанд орсон: **${mn(deposited)}**\n` +
+        (Math.abs(left) < 100 ? '✅ Бүгд тушаагдсан'
+          : left > 0 ? `🟡 Тушаагаагүй (гарт): **${mn(left)}**` : `⚠️ Илүү орсон: **${mn(-left)}**`),
+      inline: false,
+    });
+  }
+  return embed;
 }
 
 // Сарын 11, 26-ны өглөө (cron) — саяхан дууссан цалингийн хугацааны тулгалт #цалин руу

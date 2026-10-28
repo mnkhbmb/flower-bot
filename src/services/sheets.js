@@ -770,12 +770,23 @@ export async function getWorkerNames() {
 }
 
 // ===== Банкны гүйлгээ — "Гүйлгээ" tab (байхгүй бол үүсгэнэ) =====
-const TX_HEADERS = ['Огноо', 'Цаг', 'Банк', 'Төрөл', 'Дүн', 'Утга', 'Ангилал', 'Үлдэгдэл', 'Ажилтан', 'Түлхүүр'];
+const TX_HEADERS = ['Огноо', 'Цаг', 'Банк', 'Данс', 'Төрөл', 'Дүн', 'Утга', 'Ангилал', 'Үлдэгдэл', 'Ажилтан', 'Түлхүүр'];
+let txColumnsChecked = false;
 
 async function txSheet(d) {
   let sheet = findSheet(d, 'Гүйлгээ');
   if (!sheet) sheet = await d.addSheet({ title: 'Гүйлгээ', headerValues: TX_HEADERS });
+  if (!txColumnsChecked) {
+    // Хуучин tab-д "Данс" багана байхгүй бол төгсгөлд нь нэмнэ
+    await ensureColumns(sheet, TX_HEADERS).catch(err => console.error('Гүйлгээ багана нэмэх алдаа:', err.message));
+    txColumnsChecked = true;
+  }
   return sheet;
+}
+
+// Гүйлгээг аль "данс"-аар бүлэглэх: Yahoo-гийн дансны нэр (Данс/Бэлэн), эс бол банкны нэр
+export function txAccountKey(tx) {
+  return tx.account || tx.bank || 'Бусад';
 }
 
 function rowToTx(r) {
@@ -785,6 +796,7 @@ function rowToTx(r) {
     date: String(r.get('Огноо') || ''),
     time: String(r.get('Цаг') || ''),
     bank: String(r.get('Банк') || ''),
+    account: String(r.get('Данс') || ''),
     txType: String(r.get('Төрөл') || ''),
     amount: num(r.get('Дүн')),
     description: String(r.get('Утга') || ''),
@@ -803,7 +815,7 @@ export async function saveTransaction(tx) {
     if (rows.some(r => String(r.get('Түлхүүр') || '') === tx.key)) return { duplicate: true };
   }
   const row = await sheet.addRow({
-    'Огноо': tx.date, 'Цаг': tx.time || '', 'Банк': tx.bank || '', 'Төрөл': tx.txType,
+    'Огноо': tx.date, 'Цаг': tx.time || '', 'Банк': tx.bank || '', 'Данс': tx.account || '', 'Төрөл': tx.txType,
     'Дүн': tx.amount ?? '', 'Утга': tx.description || '', 'Ангилал': tx.category || '',
     'Үлдэгдэл': tx.balance ?? '', 'Ажилтан': tx.person || '', 'Түлхүүр': tx.key || '',
   });
@@ -830,8 +842,9 @@ export async function updateTransaction(rowNumber, { category, person }) {
 // "Өөрийн данс хооронд" шилжүүлгийг нийлбэрт оруулахгүй.
 export async function getTransactionTotals(from, to) {
   const d = await ensureLoaded();
-  // salesByBank / salesByDay — "Борлуулалт" орлогыг банкаар (хаалттай тулгахад)
-  const out = { from, to, count: 0, income: 0, expense: 0, incomeBy: {}, expenseBy: {}, salesByBank: {}, salesByDay: {} };
+  // salesByBank / salesByDay — "Борлуулалт" орлогыг данс/банкаар (txAccountKey, хаалттай тулгахад)
+  // byAccount — данс тус бүрийн орсон / гарсан
+  const out = { from, to, count: 0, income: 0, expense: 0, incomeBy: {}, expenseBy: {}, salesByBank: {}, salesByDay: {}, byAccount: {} };
   const sheet = findSheet(d, 'Гүйлгээ');
   if (!sheet) return out;
   for (const r of await sheet.getRows()) {
@@ -839,11 +852,14 @@ export async function getTransactionTotals(from, to) {
     if (!tx.date || tx.date < from || tx.date > to || tx.category === 'Өөрийн данс хооронд') continue;
     out.count++;
     const cat = tx.category || 'Бусад';
+    const key = txAccountKey(tx);
+    const acc = out.byAccount[key] || (out.byAccount[key] = { in: 0, out: 0 });
+    if (tx.txType === 'Орлого') acc.in += tx.amount; else acc.out += tx.amount;
     if (tx.txType === 'Орлого') {
       out.income += tx.amount;
       out.incomeBy[cat] = (out.incomeBy[cat] || 0) + tx.amount;
       if (cat === 'Борлуулалт') {
-        const bank = tx.bank || 'Бусад';
+        const bank = key;
         out.salesByBank[bank] = (out.salesByBank[bank] || 0) + tx.amount;
         const day = out.salesByDay[tx.date] || (out.salesByDay[tx.date] = {});
         day[bank] = (day[bank] || 0) + tx.amount;

@@ -57,7 +57,7 @@ export function buildTx(parsed, text) {
   };
 }
 
-// opts: { name, host, user, pass, folder, stateKey, search?, accept?(text), overrides? }
+// opts: { name, host, user, pass, folder, stateKey, search?, accept?(text), overrides?(text) }
 //   search — IMAP-ийн нэмэлт шүүлт (жнь { from: 'khanbank' })
 //   accept — текстийг шалгаад false бол бүртгэхгүй (жнь хувийн данс)
 export function startMailPoller(opts) {
@@ -128,7 +128,8 @@ async function checkMailbox(opts, state) {
         }
         if (opts.accept && !opts.accept(text)) { skipped++; done = uid; continue; }
         try {
-          await recordTransaction({ ...buildTx(parsed, text), ...opts.overrides });
+          const extra = typeof opts.overrides === 'function' ? opts.overrides(text) : opts.overrides;
+          await recordTransaction({ ...buildTx(parsed, text), ...extra });
           done = uid;
         } catch (err) {
           // Sheets/Discord түр алдаа — дараагийн шалгалтаар дахин оролдоно

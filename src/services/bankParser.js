@@ -131,9 +131,24 @@ export function mentionsAccount(text, id) {
 // BANK_OWN_ACCOUNTS="5005616977,5011413352" — хоёр нь зэрэг текстэд гарвал дотоод шилжүүлэг
 // (орлого/зарлагад тооцохгүй). Масклагдсан хэлбэрийг ("500****977") ч таньна.
 export function isOwnTransfer(text) {
-  const ids = String(process.env.BANK_OWN_ACCOUNTS || '').split(/[,\s]+/).filter(x => x.length >= 6);
-  const t = text || '';
-  const hits = ids.filter(id =>
-    t.includes(id) || new RegExp(id.slice(0, 3) + '\\*+' + id.slice(-3)).test(t));
-  return hits.length >= 2;
+  const ids = [
+    ...String(process.env.BANK_OWN_ACCOUNTS || '').split(/[,\s]+/),
+    ...shopAccounts().map(a => a.id),
+  ].filter(x => x.length >= 6);
+  return new Set(ids.filter(id => mentionsAccount(text, id))).size >= 2;
+}
+
+// "5011111111:Данс, 5022222222:Бэлэн" → [{ id, label }]. Нэр (label) нь заавал биш —
+// байхгүй бол сүүлийн 4 оронгоор нэрлэнэ.
+export function parseAccountList(str) {
+  return String(str || '').split(',').map(part => {
+    const [num, ...rest] = part.split(':');
+    const id = String(num || '').replace(/\D/g, '');
+    return { id, label: rest.join(':').trim() || `*${id.slice(-4)}` };
+  }).filter(a => a.id.length >= 6);
+}
+
+// Yahoo-д мэдэгдэл нь ирдэг дэлгүүрийн Хаан дансууд (YAHOO_SHOP_ACCOUNT)
+export function shopAccounts() {
+  return parseAccountList(process.env.YAHOO_SHOP_ACCOUNT);
 }

@@ -102,7 +102,7 @@ Facebook Messenger + Discord + Google Sheets-тэй холбож автомат�
 | `GMAIL_APP_PASSWORD` | Gmail App Password (IMAP унших, 2FA шаардана) |
 | `GMAIL_BANK_LABEL` | Банкны и-мэйлд өгсөн label (default: bank-transaction) |
 | `YAHOO_USER`, `YAHOO_APP_PASSWORD` | Хаан банкны мэдэгдэл ирдэг Yahoo хаяг, түүний App Password |
-| `YAHOO_SHOP_ACCOUNT` | Дэлгүүрийн Хаан дансны дугаар — зөвхөн энэ дансны гүйлгээг авна (заавал) |
+| `YAHOO_SHOP_ACCOUNT` | Дэлгүүрийн Хаан дансууд, жнь `5011111111:Данс,5022222222:Бэлэн` — зөвхөн эдгээрийн гүйлгээг авна (заавал). Данс = шилжүүлэг, Бэлэн = бэлэн тушаалт |
 | `YAHOO_FROM`, `YAHOO_FOLDER` | Илгээгчийн хаягийн үг (default khanbank), хавтас (default INBOX) |
 | `POS_FEE_PERCENT` | Посын шимтгэл % — хаалттай тулгахад (default 1) |
 | `BANK_OWN_ACCOUNTS` | Дэлгүүрийн өөрийн дансны дугаарууд, таслалаар (дотоод шилжүүлгийг тооцохгүй) |
