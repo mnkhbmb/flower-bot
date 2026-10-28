@@ -61,7 +61,7 @@ export function buildTx(parsed, text) {
 //   search — IMAP-ийн нэмэлт шүүлт (жнь { from: 'khanbank' })
 //   accept — текстийг шалгаад false бол бүртгэхгүй (жнь хувийн данс)
 export function startMailPoller(opts) {
-  const state = { lastUid: null, running: false };
+  const state = { lastUid: null, running: false, diagnosed: false };
   const run = async () => {
     if (state.running) return;          // өмнөх шалгалт дуусаагүй бол давхар эхлүүлэхгүй
     state.running = true;
@@ -109,6 +109,16 @@ async function checkMailbox(opts, state) {
       const uids = ((await client.search(query, { uid: true })) || [])
         .filter(u => u > lastUid)
         .sort((a, b) => a - b);
+      // Асахдаа нэг удаа: хавтаст хэдэн и-мэйл байгаа, шүүлтэд хэд нь тохирсныг хэлнэ
+      // (Хаан банкны и-мэйл огт ирэхгүй байгааг олоход). Илгээгч, агуулгыг логлохгүй.
+      if (!state.diagnosed) {
+        state.diagnosed = true;
+        const since = new Date(Date.now() - 3 * 86400000);
+        const all = ((await client.search({ since }, { uid: true })) || []).length;
+        const matched = opts.search ? ((await client.search({ ...opts.search, since }, { uid: true })) || []).length : all;
+        console.log(`🔍 ${opts.name}: "${opts.folder}" хавтаст сүүлийн 3 хоногт ${all} и-мэйл` +
+          (opts.search ? `, үүнээс ${JSON.stringify(opts.search)} шүүлтэд тохирсон ${matched}` : ''));
+      }
       if (!uids.length) return;
       console.log(`📧 ${opts.name}: ${uids.length} шинэ и-мэйл`);
 
@@ -126,7 +136,11 @@ async function checkMailbox(opts, state) {
           done = uid;
           continue;
         }
-        if (opts.accept && !opts.accept(text)) { skipped++; done = uid; continue; }
+        if (opts.accept && !opts.accept(text)) {
+          // Гарчгийг л харуулна — дансны дугаарын бичлэг өөр байвал олоход тусална
+          console.log(`${opts.name}: дансны дугаар таарсангүй — "${(parsed.subject || '').slice(0, 60)}"`);
+          skipped++; done = uid; continue;
+        }
         try {
           const extra = typeof opts.overrides === 'function' ? opts.overrides(text) : opts.overrides;
           await recordTransaction({ ...buildTx(parsed, text), ...extra });
