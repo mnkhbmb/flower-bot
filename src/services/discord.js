@@ -919,6 +919,13 @@ export async function notifyTransaction(tx) {
 
 // Гүйлгээний мэдэгдэл: embed + ангилал солих цэс (+ урьдчилгаа бол "хасахгүй" товч).
 // Ангилал солиход ч энэ функцээр дахин зурна.
+// "Хаан банк · Данс (*2668)" — аль данс болохыг дугаараар нь ялгаж харуулна
+function accountLabel(tx) {
+  const acc = shopAccounts().find(a => a.label === tx.account);
+  const name = tx.account ? ` · ${tx.account}${acc ? ` (*${acc.id.slice(-4)})` : ''}` : '';
+  return `${tx.bank || '—'}${name}`;
+}
+
 function txMessage(tx, people = salaryPeople()) {
   const isIncome = tx.txType === 'Орлого';
   const amountStr = tx.amount
@@ -930,7 +937,7 @@ function txMessage(tx, people = salaryPeople()) {
     .setTitle(isIncome ? '💵 Шинэ орлого' : '💸 Шинэ зарлага')
     .addFields(
       { name: '💰 Дүн', value: amountStr, inline: true },
-      { name: '🏦 Банк', value: `${tx.bank || '—'}${tx.account ? ` · ${tx.account}` : ''}`, inline: true },
+      { name: '🏦 Данс', value: accountLabel(tx), inline: true },
       { name: '📅 Огноо', value: `${tx.date || '—'}${tx.time ? ` ${tx.time}` : ''}`, inline: true },
       { name: '📝 Утга', value: (tx.description || '—').slice(0, 1000), inline: false },
       ...(tx.counterparty

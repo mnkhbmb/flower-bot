@@ -38,12 +38,19 @@ export function startYahooPoller() {
       const txType = khanDirection(text, acc?.id) || khan.txType;
       // Харилцагч = мөнгө хүлээн авагч (зарлага) эсвэл илгээгч (орлого) — цалинг хэнд өгснийг танихад
       const parties = khanParties(text);
-      return {
-        ...khan,
-        txType,
-        account: acc?.label || '',
-        counterparty: txType === 'Зарлага' ? parties.to : parties.from,
-      };
+      const outgoing = txType === 'Зарлага';
+      const name = outgoing ? parties.to : parties.from;
+      const number = outgoing ? parties.toAcc : parties.fromAcc;
+      // Нөгөө тал нь дэлгүүрийн өөр данс бол нэрээр нь харуулна
+      const other = accounts.find(a => a !== acc && mentionsAccount(text, a.id));
+      const counterparty = other
+        ? `Өөрийн данс: ${other.label} (*${other.id.slice(-4)})`
+        : [name, number && `*${number.slice(-4)}`].filter(Boolean).join(' · ');
+      if (!name) {
+        // Нэр уншигдсангүй — баримтын бүтцийг харахад (дэлгүүрийн гүйлгээ, тоог далдалсан)
+        console.log('Yahoo: харилцагчийн нэр олдсонгүй. Баримт:', text.replace(/\d{4,}/g, '####').replace(/\s+/g, ' ').slice(0, 700));
+      }
+      return { ...khan, txType, account: acc?.label || '', counterparty };
     },
   });
 }

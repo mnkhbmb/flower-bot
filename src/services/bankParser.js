@@ -95,11 +95,14 @@ export function parseKhan(text) {
   return { bank: 'Хаан банк', txType: detectType(text), amount: parseAmount(text), description };
 }
 
+// Кт/To тэмдэг — кирилл, латин үсэг холилдсон байж болно
+const KT_MARK = /[КK][тt]\s*\/|(^|\s)To(\s|$)/m;
+
 // Хаан банкны "Шилжүүлгийн баримт": Дт/From (гарсан) ба Кт/To (орсон) хэсэгтэй.
 // Манай данс аль хэсэгт байгаагаар чиглэлийг тогтооно; тодорхойгүй бол null.
 export function khanDirection(text, accountId) {
   const t = text || '';
-  const kt = t.search(/Кт\s*\/|Kt\s*\/|(^|\s)To(\s|$)/m);
+  const kt = t.search(KT_MARK);
   const acc = String(accountId || '').replace(/\D/g, '');
   let at = acc ? t.indexOf(acc) : -1;
   if (at < 0 && acc.length >= 6) {
@@ -116,15 +119,20 @@ export function khanDirection(text, accountId) {
 const NAME_RUN = /[А-ЯЁӨҮ][А-ЯЁӨҮ*.-]+(?:\s+[А-ЯЁӨҮ][А-ЯЁӨҮ*.-]+){0,2}/g;
 export function khanParties(text) {
   const t = text || '';
-  const kt = t.search(/Кт\s*\/|Kt\s*\//);
-  if (kt < 0) return { from: '', to: '' };
+  const kt = t.search(KT_MARK);
+  if (kt < 0) return { from: '', to: '', fromAcc: '', toAcc: '' };
   const pick = part => {
     // Мөнгөн дүнгийн бичвэр ("/ Таван мянган төгрөг /") болон шошгыг алгасна
     const names = (part.match(NAME_RUN) || []).filter(n => n.replace(/[*.-]/g, '').length >= 4);
     return names.length ? names[names.length - 1].trim() : '';
   };
+  // Дансны дугаар: 8+ оронтой тоо (журналын дугаар Дт-ээс өмнө байдаг тул тэндээс эхэлнэ)
+  const account = part => (part.match(/\d{8,}/g) || []).pop() || '';
+  const dt = Math.max(t.search(/[ДD][тt]\s*\//), 0);
   const end = t.search(/Гүйлгээний утга|Transaction description/);
-  return { from: pick(t.slice(0, kt)), to: pick(t.slice(kt, end > kt ? end : undefined)) };
+  const fromPart = t.slice(dt, kt);
+  const toPart = t.slice(kt, end > kt ? end : undefined);
+  return { from: pick(fromPart), to: pick(toPart), fromAcc: account(fromPart), toAcc: account(toPart) };
 }
 
 // ===== Ерөнхий (бусад банк) =====
