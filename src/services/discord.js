@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals, listTransactions, setCounterpartyPerson } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getLoanBalances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals, listTransactions, setCounterpartyPerson } from './sheets.js';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, findPerson } from '../config/bankCategories.js';
 import { shopAccounts } from './bankParser.js';
 import { readInvoice } from './vision.js';
@@ -89,7 +89,15 @@ const commands = [
     .setName('zeel')
     .setDescription('Цалингаас өмнө авсан зээл/урьдчилгаа бүртгэх (цалингаас хасагдана)')
     .addIntegerOption(o => o.setName('dun').setDescription('Авсан дүн (₮)').setRequired(true))
-    .addStringOption(o => o.setName('ner').setDescription('Хэн авсан бэ? (хоосон бол өөрийн нэр)').setRequired(false))
+    .addStringOption(o => o.setName('ner').setDescription('Хэн авсан бэ? (хоосон бол өөрийн нэр)')
+      .setRequired(false).setAutocomplete(true))
+    .addStringOption(o => o.setName('temdeglel').setDescription('Тэмдэглэл').setRequired(false))
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('zeel-butsalt')
+    .setDescription('Зээлийн буцаалт бүртгэх / үлдэгдэл харах (хоосон бол бүх төлөгдөөгүй зээл)')
+    .addStringOption(o => o.setName('ner').setDescription('Зээлтэй хүний нэр').setRequired(false).setAutocomplete(true))
+    .addIntegerOption(o => o.setName('dun').setDescription('Буцаасан дүн (₮)').setMinValue(1).setRequired(false))
     .addStringOption(o => o.setName('temdeglel').setDescription('Тэмдэглэл').setRequired(false))
     .toJSON(),
   new SlashCommandBuilder()
@@ -154,6 +162,16 @@ export async function startDiscord() {
     if (interaction.isAutocomplete()) {
       try {
         const typed = String(interaction.options.getFocused() || '').toLowerCase();
+        if (interaction.commandName === 'zeel-butsalt') {
+          const loans = (await openLoans()).filter(l => l.name.toLowerCase().includes(typed)).slice(0, 25);
+          await interaction.respond(loans.map(l => ({ name: `${l.name} — ${l.balance.toLocaleString()}₮`, value: l.name })));
+          return;
+        }
+        if (interaction.commandName === 'zeel') {
+          const people = (await allPeople()).filter(n => n.toLowerCase().includes(typed));
+          await interaction.respond(people.map(n => ({ name: n, value: n })));
+          return;
+        }
         const names = [...new Set([...WORKERS, ...(await getWorkerNames())])]
           .filter(n => !DIRECTORS.some(d => d.name === n))
           .filter(n => n.toLowerCase().includes(typed))
@@ -711,17 +729,45 @@ export async function startDiscord() {
           return;
         }
 
-        await saveZeel({ name, amount, note });
+        await saveZeel({ name, amount, date: ubToday(), note });
+        const onSalary = (await allPeople()).some(n => sameName(n, name));
         await interaction.editReply({
           embeds: [new EmbedBuilder()
             .setColor(0xE67E22)
-            .setTitle('💸 Зээл бүртгэгдлээ')
-            .setDescription(`**${name}** — ${amount.toLocaleString()}₮${note ? `\n📝 ${note}` : ''}\n\nЭнэ хугацааны цалингаас хасагдана.`)
+            .setTitle(LOAN_TITLE)
+            .setDescription(`**${name}** — ${amount.toLocaleString()}₮${note ? `\n📝 ${note}` : ''}\n\n${onSalary ? 'Энэ хугацааны цалингаас хасагдана.' : 'Цалингаас хасагдахгүй, буцаатал үлдэгдэлд байна.'}`)
+            .setFooter({ text: 'Буцаалт: энэ мессежид дүнгээ reply бичнэ эсвэл /zeel-butsalt' })
             .setTimestamp()]
         });
       } catch (err) {
         console.error('zeel error:', err.message);
         await interaction.editReply('⚠️ Зээл бүртгэхэд алдаа гарлаа.');
+      }
+      return;
+    }
+
+    // /zeel-butsalt — зээлийн буцаалт бүртгэх, нэр/дүнгүй бол үлдэгдэл харуулна
+    if (interaction.commandName === 'zeel-butsalt') {
+      await interaction.deferReply();
+      try {
+        const name = interaction.options.getString('ner');
+        const amount = interaction.options.getInteger('dun');
+        const note = interaction.options.getString('temdeglel') || '';
+        if (name && amount) {
+          const result = await repayLoan({ name, amount, note });
+          await interaction.editReply(result.error ? result.error : { embeds: [result.embed] });
+          return;
+        }
+        const loans = (await openLoans()).filter(l => !name || sameName(l.name, name));
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor(0xE67E22)
+            .setTitle('💸 Төлөгдөөгүй зээл')
+            .setDescription(`${loans.map(loanLine).join('\n') || 'Төлөгдөөгүй зээл алга.'}\n\nБуцаалт бүртгэх: \`/zeel-butsalt ner:Амина dun:50000\``)]
+        });
+      } catch (err) {
+        console.error('zeel-butsalt error:', err.message);
+        await interaction.editReply('⚠️ Зээлийн буцаалт бүртгэхэд алдаа гарлаа.');
       }
       return;
     }
@@ -765,6 +811,15 @@ export async function startDiscord() {
   // #бараа-таталт channel-д зураг/PDF хавсаргахад автоматаар уншина
   client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
+    if (message.reference?.messageId) {
+      try {
+        if (await handleLoanReply(message)) return;
+      } catch (err) {
+        console.error('zeel reply error:', err.message);
+        await message.reply('⚠️ Зээлийн буцаалт бүртгэхэд алдаа гарлаа.').catch(() => {});
+        return;
+      }
+    }
     if (message.channelId !== process.env.DISCORD_BARAA_CHANNEL_ID) return;
     if (message.attachments.size === 0) return;
 
@@ -1062,6 +1117,62 @@ function currentPeriodSoFar() {
   const [y, m, d] = today.split('-').map(Number);
   const from = d <= 10 ? ymd(y, m - 1, 25) : d <= 25 ? ymd(y, m, 10) : ymd(y, m, 25);
   return { from, to: today };
+}
+
+// ===== Зээлийн буцаалт =====
+const LOAN_TITLE = '💸 Зээл бүртгэгдлээ';
+const REPAY_TITLE = '↩️ Зээлийн буцаалт';
+const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const loanLine = l => `**${l.name}** — ${l.balance.toLocaleString()}₮${l.onSalary ? ' (цалингаас хасагдана)' : ''}`;
+
+function openLoans() {
+  return allPeople().then(people => getLoanBalances(currentPeriodSoFar().from, people));
+}
+
+// Буцаалтыг "Зээл" tab-д сөрөг дүнгээр бичнэ. Үлдэгдлээс илүүг авахгүй —
+// илүү бичвэл цалин дээр нэмэгдэж, хүнд илүү мөнгө тооцогдоно.
+async function repayLoan({ name, amount, note }) {
+  const loan = (await openLoans()).find(l => sameName(l.name, name));
+  if (!loan) return { error: `⚠️ **${name}**-д төлөгдөөгүй зээл алга. Цалинтай хүний өмнөх хугацааны зээл цалингаас нь хасагдсан.` };
+  if (amount === 'all') amount = loan.balance;
+  if (amount > loan.balance) return { error: `⚠️ Буцаалт үлдэгдлээс их байна. **${loan.name}**-ийн үлдэгдэл: **${loan.balance.toLocaleString()}₮**` };
+  await saveZeel({ name: loan.name, amount: -amount, date: ubToday(), note: `Буцаалт${note ? `: ${note}` : ''}` });
+  const left = loan.balance - amount;
+  return {
+    embed: new EmbedBuilder()
+      .setColor(0x2ECC71)
+      .setTitle(REPAY_TITLE)
+      .setDescription(`**${loan.name}** — ${amount.toLocaleString()}₮ буцаалаа${note ? `\n📝 ${note}` : ''}\n\n${left ? `Үлдэгдэл: **${left.toLocaleString()}₮**` : '✅ Зээл бүрэн төлөгдлөө'}${loan.onSalary ? '\nЦалингаас хасах дүн багасна.' : ''}`)
+      .setFooter({ text: 'Дахин буцаалт: энэ мессежид дүнгээ reply бичнэ' })
+      .setTimestamp(),
+  };
+}
+
+// Reply-ийн бичвэр → { amount, note }: "50000", "50,000 бэлнээр", "57к", "бүгд"
+function parseRepayText(text) {
+  const t = String(text || '').trim();
+  if (/^(бүгд|бүх|bugd|buh)$/i.test(t)) return { amount: 'all', note: '' };
+  const m = t.match(/^(\d{1,3}(?:[,. ]\d{3})+|\d+)\s*([kк])?(?:\s+(.+))?$/is);
+  if (!m) return null;
+  return { amount: Number(m[1].replace(/\D/g, '')) * (m[2] ? 1000 : 1), note: (m[3] || '').trim() };
+}
+
+// Ботын зээлийн мессежид дүн бичиж reply хийвэл буцаалт болгоно. Боловсруулсан бол true.
+async function handleLoanReply(message) {
+  const parsed = parseRepayText(message.content);
+  if (!parsed) return false;
+  const ref = await message.fetchReference().catch(() => null);
+  const embed = ref?.author.id === client.user.id ? ref.embeds[0] : null;
+  if (![LOAN_TITLE, REPAY_TITLE].includes(embed?.title)) return false;
+  const name = embed.description?.match(/^\*\*(.+?)\*\*/)?.[1];
+  if (!name) return false;
+  if (parsed.amount !== 'all' && parsed.amount < 1000) {
+    await message.reply('⚠️ Дүнгээ бүтнээр нь бичнэ үү. Жишээ нь: 50000, 57к эсвэл бүгд');
+    return true;
+  }
+  const result = await repayLoan({ name, ...parsed });
+  await message.reply(result.error ? result.error : { embeds: [result.embed] });
+  return true;
 }
 
 // Хугацааны цэвэр цалин (зээл хассан) — нэр → дүн. buildSalaryEmbed-тэй ижил тооцоо.

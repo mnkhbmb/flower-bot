@@ -411,10 +411,37 @@ export async function getAdvances(from, to) {
     const date = r.get('Огноо');
     const name = (r.get('Ажилтан') || '').trim();
     if (!name || date < from || date > to) continue;
-    const amount = Number(String(r.get('Дүн') || '').replace(/[^\d]/g, '')) || 0;
-    result[name] = (result[name] || 0) + amount;
+    result[name] = (result[name] || 0) + zeelAmount(r.get('Дүн'));
   }
   return result;
+}
+
+// "Зээл" tab-ийн дүн: зээл эерэг, буцаалт сөрөг ("-50,000")
+function zeelAmount(value) {
+  const s = String(value || '');
+  const n = Number(s.replace(/[^\d.]/g, '')) || 0;
+  return /[-(]/.test(s) ? -n : n;
+}
+
+// Төлөгдөөгүй зээл → [{ name, balance, onSalary }].
+// Цалинтай хүний зээл цалингаас бүтнээрээ хасагддаг тул зөвхөн одоогийн хугацааных (periodFrom-оос)
+// үлдэнэ; цалингаас хасагддаггүй хүнийх буцаатал хэвээр үлдэнэ.
+export async function getLoanBalances(periodFrom, salaried = []) {
+  const d = await ensureLoaded();
+  const sheet = findSheet(d, 'Зээл');
+  if (!sheet) return [];
+  const onSalary = new Set(salaried.map(n => n.trim().toLowerCase()));
+  const loans = new Map();
+  for (const r of await sheet.getRows()) {
+    const name = (r.get('Ажилтан') || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (onSalary.has(key) && String(r.get('Огноо')) < periodFrom) continue;
+    const loan = loans.get(key) || { name, balance: 0, onSalary: onSalary.has(key) };
+    loan.balance += zeelAmount(r.get('Дүн'));
+    loans.set(key, loan);
+  }
+  return [...loans.values()].filter(l => l.balance > 0);
 }
 
 // Баглаа текстээс товчлол + тоог задлах
