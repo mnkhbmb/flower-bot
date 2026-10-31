@@ -2,10 +2,10 @@
 // Discord дээрх цэснээс ангиллыг гараар сольж болно — энд зөвхөн эхний таамаг.
 
 export const EXPENSE_CATEGORIES = [
-  'Бараа таталт', 'Урьдчилгаа', 'Цалин', 'Түрээс', 'Баглаа боодол', 'Хүргэлт, тээвэр',
+  'Бараа таталт', 'Урьдчилгаа', 'Зээл өгсөн', 'Цалин', 'Түрээс', 'Баглаа боодол', 'Хүргэлт, тээвэр',
   'Интернет, утас', 'Татвар, НД', 'Банкны шимтгэл', 'Өөрийн данс хооронд', 'Бусад зарлага',
 ];
-export const INCOME_CATEGORIES = ['Борлуулалт', 'Буцаалт', 'Өөрийн данс хооронд', 'Бусад орлого'];
+export const INCOME_CATEGORIES = ['Борлуулалт', 'Зээл буцаалт', 'Буцаалт', 'Өөрийн данс хооронд', 'Бусад орлого'];
 
 // Цалинтай холбоогүй ангилал — дээрээс доош эрэмбээр шалгана
 const EXPENSE_RULES = [
@@ -20,6 +20,7 @@ const EXPENSE_RULES = [
 ];
 
 const INCOME_RULES = [
+  { cat: 'Зээл буцаалт', words: ['зээл', 'zeel'] },
   { cat: 'Буцаалт', words: ['буцаа', 'butsaa', 'refund', 'return'] },
 ];
 
@@ -80,6 +81,8 @@ export function categorize(tx, people = [], knownPerson = null) {
     return { category: 'Цалин', person };
   }
   if (SALARY_WORDS.some(w => d.includes(w))) return { category: 'Цалин', person: null };
+  // Ажилчин биш хүнд өгсөн зээл
+  if (['зээл', 'zeel'].some(w => hasWord(d, w))) return { category: 'Зээл өгсөн', person: null };
 
   const rule = EXPENSE_RULES.find(r => r.words.some(w => hasWord(d, w)));
   return { category: rule ? rule.cat : 'Бусад зарлага', person: null };

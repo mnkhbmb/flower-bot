@@ -87,7 +87,7 @@ const commands = [
     .toJSON(),
   new SlashCommandBuilder()
     .setName('zeel')
-    .setDescription('Цалингаас өмнө авсан зээл/урьдчилгаа бүртгэх (цалингаас хасагдана)')
+    .setDescription('Зээл бүртгэх (ажилтных цалингаас хасагдана, бусдынх буцаатал үлдэнэ)')
     .addIntegerOption(o => o.setName('dun').setDescription('Авсан дүн (₮)').setRequired(true))
     .addStringOption(o => o.setName('ner').setDescription('Хэн авсан бэ? (хоосон бол өөрийн нэр)')
       .setRequired(false).setAutocomplete(true))
@@ -168,7 +168,9 @@ export async function startDiscord() {
           return;
         }
         if (interaction.commandName === 'zeel') {
-          const people = (await allPeople()).filter(n => n.toLowerCase().includes(typed));
+          // Ажилчин биш зээлдэгчийг ч санал болгоно — нэр нь ижил бичигдэж үлдэгдэл нэгдэнэ
+          const known = [...new Set([...(await openLoans()).map(l => l.name), ...(await allPeople())])];
+          const people = known.filter(n => n.toLowerCase().includes(typed)).slice(0, 25);
           await interaction.respond(people.map(n => ({ name: n, value: n })));
           return;
         }
@@ -212,6 +214,9 @@ export async function startDiscord() {
           } else {
             note = '👩 Хэнийх болохыг доорх цэснээс сонгоно уу.';
           }
+        }
+        if (['Зээл өгсөн', 'Зээл буцаалт'].includes(category)) {
+          note = `ℹ️ Ангиллыг солилоо. Зээлийн үлдэгдэлд оруулах бол ${category === 'Зээл өгсөн' ? '`/zeel`' : '`/zeel-butsalt`'} ашиглана уу.`;
         }
         const tx = await updateTransaction(row, { category, person });
         await interaction.editReply(txMessage(tx, people));
