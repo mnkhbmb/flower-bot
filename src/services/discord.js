@@ -1,6 +1,6 @@
 // Discord bot — мэдэгдэл болон тайлан
 import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, StringSelectMenuBuilder } from 'discord.js';
-import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getLoanBalances, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals, listTransactions, setCounterpartyPerson } from './sheets.js';
+import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getLoanBalances, getLoanRows, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals, listTransactions, setCounterpartyPerson } from './sheets.js';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, findPerson } from '../config/bankCategories.js';
 import { shopAccounts } from './bankParser.js';
 import { readInvoice } from './vision.js';
@@ -94,6 +94,11 @@ const commands = [
     .addStringOption(o => o.setName('temdeglel').setDescription('Тэмдэглэл').setRequired(false))
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('zeel-hynah')
+    .setDescription('Зээлийн хяналт: хэн хэдийг авсан, үлдэгдэл (нэр бичвэл түүх нь)')
+    .addStringOption(o => o.setName('ner').setDescription('Зээлдэгчийн нэр').setRequired(false).setAutocomplete(true))
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('zeel-butsalt')
     .setDescription('Зээлийн буцаалт бүртгэх / үлдэгдэл харах (хоосон бол бүх төлөгдөөгүй зээл)')
     .addStringOption(o => o.setName('ner').setDescription('Зээлтэй хүний нэр').setRequired(false).setAutocomplete(true))
@@ -162,6 +167,12 @@ export async function startDiscord() {
     if (interaction.isAutocomplete()) {
       try {
         const typed = String(interaction.options.getFocused() || '').toLowerCase();
+        if (interaction.commandName === 'zeel-hynah') {
+          const names = [...new Set((await getLoanRows()).map(r => r.name))]
+            .filter(n => n.toLowerCase().includes(typed)).slice(0, 25);
+          await interaction.respond(names.map(n => ({ name: n, value: n })));
+          return;
+        }
         if (interaction.commandName === 'zeel-butsalt') {
           const loans = (await openLoans()).filter(l => l.name.toLowerCase().includes(typed)).slice(0, 25);
           await interaction.respond(loans.map(l => ({ name: `${l.name} — ${l.balance.toLocaleString()}₮`, value: l.name })));
@@ -751,6 +762,20 @@ export async function startDiscord() {
       return;
     }
 
+    // /zeel-hynah — төлөгдөөгүй зээлийн жагсаалт, нэр өгвөл тэр хүний түүх
+    if (interaction.commandName === 'zeel-hynah') {
+      await interaction.deferReply();
+      try {
+        const name = interaction.options.getString('ner');
+        const [loans, rows] = await Promise.all([openLoans(), getLoanRows()]);
+        await interaction.editReply({ embeds: [name ? loanHistoryEmbed(name, loans, rows) : loanOverviewEmbed(loans)] });
+      } catch (err) {
+        console.error('zeel-hynah error:', err.message);
+        await interaction.editReply('⚠️ Зээлийн мэдээлэл уншихад алдаа гарлаа.');
+      }
+      return;
+    }
+
     // /zeel-butsalt — зээлийн буцаалт бүртгэх, нэр/дүнгүй бол үлдэгдэл харуулна
     if (interaction.commandName === 'zeel-butsalt') {
       await interaction.deferReply();
@@ -1128,7 +1153,40 @@ function currentPeriodSoFar() {
 const LOAN_TITLE = '💸 Зээл бүртгэгдлээ';
 const REPAY_TITLE = '↩️ Зээлийн буцаалт';
 const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
-const loanLine = l => `**${l.name}** — ${l.balance.toLocaleString()}₮${l.onSalary ? ' (цалингаас хасагдана)' : ''}`;
+const loanLine = l => `**${l.name}** — ${l.balance.toLocaleString()}₮ · ${l.since}-с${l.onSalary ? ' (цалингаас хасагдана)' : ''}`;
+
+// Нийт төлөгдөөгүй зээл: ажилчин бишийг эхэнд, том дүнгээс нь
+function loanOverviewEmbed(loans) {
+  const sorted = [...loans].sort((a, b) => b.balance - a.balance);
+  const section = (title, list) => (list.length ? [`${title}\n${list.map(loanLine).join('\n')}`] : []);
+  const text = [
+    ...section('🤝 **Бусад хүмүүс**', sorted.filter(l => !l.onSalary)),
+    ...section('👩 **Ажилчид**', sorted.filter(l => l.onSalary)),
+  ].join('\n\n');
+  const total = loans.reduce((s, l) => s + l.balance, 0);
+  return new EmbedBuilder()
+    .setColor(0xE67E22)
+    .setTitle(`📋 Зээлийн хяналт — нийт ${total.toLocaleString()}₮`)
+    .setDescription(text.slice(0, 4000) || 'Төлөгдөөгүй зээл алга.')
+    .setFooter({ text: 'Нэг хүний түүх: /zeel-hynah ner:Нэр' })
+    .setTimestamp();
+}
+
+// Нэг хүний зээл, буцаалтын түүх (сүүлийн 20 мөр)
+function loanHistoryEmbed(name, loans, rows) {
+  const mine = rows.filter(r => sameName(r.name, name)).sort((a, b) => a.date.localeCompare(b.date));
+  const lines = mine.slice(-20).map(r => {
+    const note = r.note.replace(/\s*\[tx:\d+\]/, '').trim();
+    return `${r.date} · ${r.amount < 0 ? '↩️' : '💸'} ${Math.abs(r.amount).toLocaleString()}₮${note ? ` · ${note}` : ''}`;
+  });
+  const loan = loans.find(l => sameName(l.name, name));
+  const earlier = mine.length - lines.length;
+  return new EmbedBuilder()
+    .setColor(0xE67E22)
+    .setTitle(`📋 Зээлийн түүх — ${mine[0]?.name || name}`)
+    .setDescription(`${earlier > 0 ? `_өмнөх ${earlier} мөрийг алгаслаа_\n` : ''}${lines.join('\n') || 'Зээлийн бүртгэл алга.'}\n\nҮлдэгдэл: **${(loan?.balance || 0).toLocaleString()}₮**${loan?.onSalary ? ' (цалингаас хасагдана)' : ''}`.slice(0, 4000))
+    .setTimestamp();
+}
 
 function openLoans() {
   return allPeople().then(people => getLoanBalances(currentPeriodSoFar().from, people));

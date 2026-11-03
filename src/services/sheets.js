@@ -423,22 +423,33 @@ function zeelAmount(value) {
   return /[-(]/.test(s) ? -n : n;
 }
 
-// Төлөгдөөгүй зээл → [{ name, balance, onSalary }].
-// Цалинтай хүний зээл цалингаас бүтнээрээ хасагддаг тул зөвхөн одоогийн хугацааных (periodFrom-оос)
-// үлдэнэ; цалингаас хасагддаггүй хүнийх буцаатал хэвээр үлдэнэ.
-export async function getLoanBalances(periodFrom, salaried = []) {
+// "Зээл" tab-ийн бүх мөр → [{ date, name, amount, note }] (буцаалт сөрөг дүнтэй)
+export async function getLoanRows() {
   const d = await ensureLoaded();
   const sheet = findSheet(d, 'Зээл');
   if (!sheet) return [];
+  return (await sheet.getRows())
+    .map(r => ({
+      date: String(r.get('Огноо') || ''),
+      name: (r.get('Ажилтан') || '').trim(),
+      amount: zeelAmount(r.get('Дүн')),
+      note: String(r.get('Тэмдэглэл') || ''),
+    }))
+    .filter(r => r.name);
+}
+
+// Төлөгдөөгүй зээл → [{ name, balance, onSalary, since }].
+// Цалинтай хүний зээл цалингаас бүтнээрээ хасагддаг тул зөвхөн одоогийн хугацааных (periodFrom-оос)
+// үлдэнэ; цалингаас хасагддаггүй хүнийх буцаатал хэвээр үлдэнэ.
+export async function getLoanBalances(periodFrom, salaried = []) {
   const onSalary = new Set(salaried.map(n => n.trim().toLowerCase()));
   const loans = new Map();
-  for (const r of await sheet.getRows()) {
-    const name = (r.get('Ажилтан') || '').trim();
-    if (!name) continue;
-    const key = name.toLowerCase();
-    if (onSalary.has(key) && String(r.get('Огноо')) < periodFrom) continue;
-    const loan = loans.get(key) || { name, balance: 0, onSalary: onSalary.has(key) };
-    loan.balance += zeelAmount(r.get('Дүн'));
+  for (const r of await getLoanRows()) {
+    const key = r.name.toLowerCase();
+    if (onSalary.has(key) && r.date < periodFrom) continue;
+    const loan = loans.get(key) || { name: r.name, balance: 0, onSalary: onSalary.has(key), since: r.date };
+    loan.balance += r.amount;
+    if (r.date < loan.since) loan.since = r.date;
     loans.set(key, loan);
   }
   return [...loans.values()].filter(l => l.balance > 0);
