@@ -9,8 +9,9 @@ const FONT_BOLD = require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf');
 
 const mn = n => `${Math.round(n || 0).toLocaleString('en-US')}₮`;
 
-// { from, to, workers: getSalaryReport().workers, advances, directors: [{name, amount}], finance? } → Buffer
-export function buildSalaryPdf({ from, to, workers, advances, directors, finance }) {
+// { from, to, workers: getSalaryReport().workers, advances, directors: [{name, amount}],
+//   finance?, bank?: getTransactionTotals, top?: getTopSold, balances?: [{ name, since, base, in, out, balance }] } → Buffer
+export function buildSalaryPdf({ from, to, workers, advances, directors, finance, bank, top, balances }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40, info: { Title: `Цалин ${from} ~ ${to}` } });
     const chunks = [];
@@ -79,6 +80,54 @@ export function buildSalaryPdf({ from, to, workers, advances, directors, finance
       row(['Зарлага', `-${mn(finance.zarlaga)}`], F);
       row(['Цэвэр орлого', mn(finance.tsever)], F, { bold: true });
       row([`${finance.days} өдөр, ${finance.count} хаалт`, ''], F);
+    }
+
+    // ----- Банкны бодит гүйлгээ -----
+    if (bank?.count) {
+      heading(`Банкны бодит гүйлгээ (${bank.count})`);
+      const F = [300, 120];
+      row(['Орсон', mn(bank.income)], F, { bold: true });
+      row(['Гарсан', `-${mn(bank.expense)}`], F, { bold: true });
+      row(['Цэвэр', mn(bank.income - bank.expense)], F, { bold: true });
+      const group = (title, entries) => {
+        if (!entries.length) return;
+        row([title, ''], F, { bold: true, fill: '#eeeeee' });
+        for (const [name, value] of entries) row([name, value], F);
+      };
+      const byAmount = by => Object.entries(by).sort((a, b) => b[1] - a[1]).map(([c, a]) => [c, mn(a)]);
+      group('Орлого (ангиллаар)', byAmount(bank.incomeBy));
+      group('Зарлага (ангиллаар)', byAmount(bank.expenseBy));
+      group('Данс тус бүрээр (орсон / гарсан)',
+        Object.entries(bank.byAccount || {}).map(([k, v]) => [k, `+${mn(v.in)} / -${mn(v.out)}`]));
+    }
+
+    // ----- Дансны үлдэгдэл -----
+    if (balances?.length) {
+      heading('Дансны үлдэгдэл');
+      const B = [165, 90, 85, 85, 90];
+      row(['Данс', 'Эхний', 'Орсон', 'Гарсан', 'Одоо'], B, { bold: true, fill: '#eeeeee' });
+      for (const b of balances) row([b.name || b.account, mn(b.base), `+${mn(b.in)}`, `-${mn(b.out)}`, mn(b.balance)], B);
+      doc.font('r').fontSize(8).fillColor('#555')
+        .text(`Эхний үлдэгдэл: ${balances.map(b => `${b.name || b.account} — ${b.since}`).join(', ')}`, left);
+    }
+
+    // ----- Хамгийн их зарагдсан -----
+    if (top && (top.flowers.length || top.others.length)) {
+      heading(`Хамгийн их зарагдсан (${top.days} өдрийн хаалт)`);
+      const T = [40, 280, 100];
+      const A = { align: ['left', 'left', 'right'] };
+      row(['#', 'Цэцэг', 'Тоо'], T, { bold: true, fill: '#eeeeee', ...A });
+      top.flowers.slice(0, 20).forEach((it, i) => row([i + 1, it.name, `${it.qty.toLocaleString('en-US')}ш`], T, A));
+      row(['', 'Нийт цэцэг', `${top.flowers.reduce((s, i) => s + i.qty, 0).toLocaleString('en-US')}ш`], T, { bold: true, ...A });
+      if (top.others.length) {
+        row(['', 'Боодол, дагалдах бараа', ''], T, { bold: true, fill: '#eeeeee', ...A });
+        top.others.slice(0, 10).forEach(it => row(['', it.name, `${it.qty.toLocaleString('en-US')}ш`], T, A));
+      }
+      if (top.waste > 0) row(['', 'Хорогдол', `${top.waste.toLocaleString('en-US')}ш`], T, A);
+      if (top.unknown.length) {
+        doc.font('r').fontSize(8).fillColor('#555')
+          .text(`Танигдаагүй товчлол: ${top.unknown.slice(0, 15).map(i => `${i.name} (${i.qty})`).join(', ')}`, left);
+      }
     }
 
     // ----- Ажилтан бүрийн ирц -----

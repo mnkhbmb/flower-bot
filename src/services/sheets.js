@@ -885,6 +885,42 @@ export async function listTransactions(from, to) {
   return (await sheet.getRows()).map(rowToTx).filter(tx => tx.date && tx.date >= from && tx.date <= to);
 }
 
+// ===== Дансны үлдэгдэл =====
+// "Тохиргоо"-д uldegdel:<данс> = "дүн|YYYY-MM-DD HH:MM". Тэр мөчөөс хойших гүйлгээг нэмж/хасаж
+// одоогийн үлдэгдлийг тооцно. Данс = txAccountKey ("Данс", "Бэлэн", "ХасБанк").
+export async function setAccountBalance(account, amount, stamp) {
+  await setSetting(`uldegdel:${account}`, `${amount}|${stamp}`);
+}
+
+// → [{ account, base, since, balance, in, out, count, bank }]
+// bank — сүүлийн гүйлгээний и-мэйлд банк өөрөө бичсэн үлдэгдэл ба тэр мөчид бидний тооцоолсон дүн
+export async function getAccountBalances() {
+  const d = await ensureLoaded();
+  const settings = await settingsSheet(d, false);
+  const bases = (settings ? await settings.getRows() : [])
+    .map(r => [String(r.get('Түлхүүр') || '').trim(), String(r.get('Утга') ?? '').trim()])
+    .filter(([k]) => k.startsWith('uldegdel:'))
+    .map(([k, v]) => {
+      const [amount, since = ''] = v.split('|');
+      return { account: k.slice('uldegdel:'.length), base: Number(amount.replace(/[^\d.-]/g, '')) || 0, since };
+    });
+  if (!bases.length) return [];
+  const sheet = findSheet(d, 'Гүйлгээ');
+  const txs = sheet ? (await sheet.getRows()).map(rowToTx) : [];
+  return bases.map(b => {
+    const out = { ...b, balance: b.base, in: 0, out: 0, count: 0, bank: null };
+    for (const tx of txs) {
+      // Цаггүй гүйлгээ тохируулсан өдрөө орсон бол аль хэдийн үлдэгдэлд орсон гэж үзнэ
+      if (txAccountKey(tx) !== b.account || `${tx.date} ${tx.time}` <= b.since) continue;
+      if (tx.txType === 'Орлого') { out.balance += tx.amount; out.in += tx.amount; }
+      else { out.balance -= tx.amount; out.out += tx.amount; }
+      out.count++;
+      if (tx.balance != null) out.bank = { balance: tx.balance, computed: out.balance, date: tx.date, time: tx.time };
+    }
+    return out;
+  });
+}
+
 // Банкны харилцагчийн нэр → ажилтан ("Тохиргоо" tab, "harilcagch:ЗОЛЗАЯА" = Амина).
 // Discord дээр нэг удаа сонгоход дараагийн шилжүүлгээс автоматаар танина.
 const normParty = name => String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
