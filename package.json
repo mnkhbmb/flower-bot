@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.99.0",
+    "dejavu-fonts-ttf": "^2.37.3",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
@@ -18,7 +19,8 @@
     "imapflow": "^1.4.3",
     "mailparser": "^3.9.12",
     "node-cron": "^3.0.3",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.17.2"
   },
   "engines": {
     "node": ">=18.0.0"

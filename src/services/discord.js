@@ -3,6 +3,7 @@ import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuil
 import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryToSheet, saveBaraa, decreaseAguurlah, increaseAguurlah, getAguurlah, manualAddAguurlah, saveZeel, getAdvances, getLoanBalances, getLoanRows, getPeriodReport, addAguulahItem, getTopSold, saveHorogdol, getYuanRate, setSetting, getSalaryRates, setSalaryRate, rateFor, getWorkerNames, DEFAULT_DAILY_RATE, getTransaction, updateTransaction, removeZeelByTag, getTransactionTotals, listTransactions, setCounterpartyPerson } from './sheets.js';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, findPerson } from '../config/bankCategories.js';
 import { shopAccounts } from './bankParser.js';
+import { buildSalaryPdf } from './salaryPdf.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -650,8 +651,8 @@ export async function startDiscord() {
       await interaction.deferReply();
       try {
         const { from, to } = getSalaryPeriod();
-        const embeds = await buildSalaryEmbed(from, to, { save: false });
-        await interaction.editReply({ embeds });
+        const { embeds, files } = await buildSalaryEmbed(from, to, { save: false });
+        await interaction.editReply({ embeds, files });
       } catch (err) {
         console.error('tsalin error:', err.message);
         await interaction.editReply('⚠️ Цалин тооцоход алдаа гарлаа.');
@@ -1133,20 +1134,24 @@ function ymd(y, m, d) {
   return dt.toISOString().slice(0, 10);
 }
 
-// Саяхан дууссан цалингийн хугацаа (11, 26-нд дуудна): 11 → өмнөх сарын 25 ~ 10, 26 → 10 ~ 25
+// Цалингийн хугацаа: 11 ~ 25 (25-нд олгоно), 26 ~ дараа сарын 10 (10-нд олгоно).
+// Хил давхцахгүй — 10, 25-ны өдөр зөвхөн нэг хугацаанд тоологдоно.
+function salaryPeriodFor(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  if (d >= 11 && d <= 25) return { from: ymd(y, m, 11), to: ymd(y, m, 25) };
+  if (d >= 26) return { from: ymd(y, m, 26), to: ymd(y, m + 1, 10) };
+  return { from: ymd(y, m - 1, 26), to: ymd(y, m, 10) };
+}
+
+// Саяхан дууссан цалингийн хугацаа (11, 26-нд дуудна)
 function lastEndedPeriod() {
-  const [y, m, d] = ubToday().split('-').map(Number);
-  if (d >= 11 && d <= 25) return { from: ymd(y, m - 1, 25), to: ymd(y, m, 10) };
-  if (d >= 26) return { from: ymd(y, m, 10), to: ymd(y, m, 25) };
-  return { from: ymd(y, m - 1, 10), to: ymd(y, m - 1, 25) };
+  return salaryPeriodFor(addDays(currentPeriodSoFar().from, -1));
 }
 
 // Одоо явж буй хугацааны эхнээс өнөөдрийг хүртэл (/tulgalt)
 function currentPeriodSoFar() {
   const today = ubToday();
-  const [y, m, d] = today.split('-').map(Number);
-  const from = d <= 10 ? ymd(y, m - 1, 25) : d <= 25 ? ymd(y, m, 10) : ymd(y, m, 25);
-  return { from, to: today };
+  return { from: salaryPeriodFor(today).from, to: today };
 }
 
 // ===== Зээлийн буцаалт =====
@@ -1248,6 +1253,21 @@ async function netSalaries(from, to) {
   return out;
 }
 
+// Бодсон цалин ба банкаар шилжүүлсэн цалин ("Цалин" ангилал, хугацааны сүүлийн өдрөөс 5 хоног) — нэрээр
+async function salaryPayments(from, to) {
+  const owed = await netSalaries(from, to);
+  const pays = (await listTransactions(addDays(to, -1), addDays(to, 5)))
+    .filter(tx => tx.txType === 'Зарлага' && tx.category === 'Цалин');
+  const paid = {};
+  let unknown = 0;
+  for (const tx of pays) {
+    if (!tx.person) { unknown += tx.amount; continue; }
+    const key = Object.keys(owed).find(n => n.toLowerCase() === tx.person.toLowerCase()) || tx.person;
+    paid[key] = (paid[key] || 0) + tx.amount;
+  }
+  return { owed, paid, unknown };
+}
+
 function addDays(date, n) {
   return new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 }
@@ -1292,16 +1312,7 @@ async function buildReconcileEmbed(from, to) {
   let salaryText = '';
   let salaryOk = true;
   try {
-    const owed = await netSalaries(from, to);
-    const pays = (await listTransactions(addDays(to, -1), addDays(to, 5)))
-      .filter(tx => tx.txType === 'Зарлага' && tx.category === 'Цалин');
-    const paid = {};
-    let unknown = 0;
-    for (const tx of pays) {
-      if (!tx.person) { unknown += tx.amount; continue; }
-      const key = Object.keys(owed).find(n => n.toLowerCase() === tx.person.toLowerCase()) || tx.person;
-      paid[key] = (paid[key] || 0) + tx.amount;
-    }
+    const { owed, paid, unknown } = await salaryPayments(from, to);
     const names = [...new Set([...Object.keys(owed), ...Object.keys(paid)])];
     const rows = names.map(n => {
       const diff = Math.round((paid[n] || 0) - (owed[n] || 0));
@@ -1404,22 +1415,9 @@ export async function sendDailyReport() {
   await channel.send({ embeds: [dailyEmbed(r)] });
 }
 
-// Цалингийн хугацааг тооцох
+// Өнөөдрийг агуулсан цалингийн хугацаа (Улаанбаатарын цагаар)
 function getSalaryPeriod() {
-  const now = new Date();
-  const day = now.getDate();
-  const yyyy = now.toISOString().slice(0, 4);
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const prevMm = String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0');
-  const prevYyyy = now.getMonth() === 0 ? String(now.getFullYear() - 1) : yyyy;
-
-  if (day === 10) {
-    // 25-аас 10 хүртэл
-    return { from: `${prevYyyy}-${prevMm}-25`, to: `${yyyy}-${mm}-10` };
-  } else {
-    // 10-аас 25 хүртэл
-    return { from: `${yyyy}-${mm}-10`, to: `${yyyy}-${mm}-25` };
-  }
+  return salaryPeriodFor(ubToday());
 }
 
 // Цалингийн тооцоог уншаад embed бэлдэх (sheet-с динамикаар).
@@ -1510,7 +1508,15 @@ async function buildSalaryEmbed(from, to, { save = false } = {}) {
     console.error('Борлуулалтын эрэмбэ унших алдаа:', err.message);
   }
 
-  return [embed, attendanceEmbed(report), ...financeEmbeds, ...topEmbeds];
+  const embeds = [embed, attendanceEmbed(report), ...financeEmbeds, ...topEmbeds];
+  const files = [];
+  try {
+    const pdf = await buildSalaryPdf({ from, to, workers: report.workers, advances, directors: DIRECTORS, finance: period });
+    files.push(new AttachmentBuilder(pdf, { name: `tsalin_${from}_${to}.pdf` }));
+  } catch (err) {
+    console.error('Цалингийн PDF алдаа:', err.message);
+  }
+  return { embeds, files };
 }
 
 // Борлуулалтын эрэмбийн embed — /zarsan болон цалингийн мессежид хамт ашиглана
@@ -1643,10 +1649,34 @@ function financeEmbed(r) {
     .setTimestamp();
 }
 
-// Цалингийн сануулга — сарын 10, 25-нд 12:00-д (cron). Sheet-д хадгална.
+// Цалингийн тооцоо — сарын 10, 25-нд 14:00-д (cron). Sheet-д хадгалж, PDF хавсаргана.
 export async function sendSalaryReminder() {
   const channel = await client.channels.fetch(process.env.DISCORD_SALARY_CHANNEL_ID);
   const { from, to } = getSalaryPeriod();
-  const embeds = await buildSalaryEmbed(from, to, { save: true });
-  await channel.send({ embeds });
+  const { embeds, files } = await buildSalaryEmbed(from, to, { save: true });
+  await channel.send({ embeds, files });
+}
+
+// "Цалингаа шилжүүлээрэй" сануулга — 10, 25-нд 17:00, 20:00-д (cron).
+// Банкаар шилжүүлсэн нь харагдсан хүнийг хасна; бүгд авсан бол юу ч явуулахгүй.
+export async function sendSalaryPayReminder() {
+  const channel = await client.channels.fetch(process.env.DISCORD_SALARY_CHANNEL_ID);
+  const { from, to } = getSalaryPeriod();
+  const { owed, paid, unknown } = await salaryPayments(from, to);
+  const left = Object.entries(owed)
+    .map(([name, amount]) => [name, Math.round(amount - (paid[name] || 0))])
+    .filter(([, rest]) => rest >= 100);
+  if (!left.length) return;
+  const total = left.reduce((s, [, rest]) => s + rest, 0);
+  await channel.send({
+    embeds: [new EmbedBuilder()
+      .setColor(0xE74C3C)
+      .setTitle('⏰ Цалингаа шилжүүлээрэй')
+      .setDescription(
+        `${from} ~ ${to}\n\n${left.map(([name, rest]) => `**${name}** — ${rest.toLocaleString()}₮`).join('\n')}` +
+        `\n\nНийт: **${total.toLocaleString()}₮**` +
+        (unknown > 0 ? `\n❓ Хэнийх нь тодорхойгүй шилжүүлэг: ${unknown.toLocaleString()}₮ — #орлого-зарлага-бүртгэл дээр сонгоно уу` : '') +
+        '\n\n_Банкаар шилжүүлсэн нь харагдсан хүнийг жагсаалтаас хасна. Бэлнээр өгсөн бол тоохгүй байж болно._')
+      .setTimestamp()],
+  });
 }

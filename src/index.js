@@ -5,7 +5,7 @@ import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
-import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendBaraaReminder, sendTulgaltReport } from './services/discord.js';
+import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendSalaryPayReminder, sendBaraaReminder, sendTulgaltReport } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
 import { startYahooPoller } from './services/yahoo.js';
 import { wasSentByBot } from './services/messenger.js';
@@ -169,14 +169,25 @@ cron.schedule('0 12 * * *', async () => {
   }
 });
 
-// --- CRON: сарын 10, 25-нд 12:00-д цалингийн сануулга ---
-// UTC+8 → 04:00 UTC = 12:00 Улаанбаатар
-cron.schedule('0 4 10,25 * *', async () => {
-  console.log('💵 Цалингийн сануулга илгээж байна...');
+// --- CRON: сарын 10, 25-нд 14:00-д цалингийн бүтэн тооцоо + PDF ---
+// UTC+8 → 06:00 UTC = 14:00 Улаанбаатар
+cron.schedule('0 6 10,25 * *', async () => {
+  console.log('💵 Цалингийн тооцоо илгээж байна...');
   try {
     await sendSalaryReminder();
   } catch (err) {
     console.error('Цалин сануулга алдаа:', err);
+  }
+});
+
+// --- CRON: сарын 10, 25-нд 17:00, 20:00-д "цалингаа шилжүүлээрэй" ---
+// UTC+8 → 09:00, 12:00 UTC = 17:00, 20:00 Улаанбаатар
+cron.schedule('0 9,12 10,25 * *', async () => {
+  console.log('⏰ Цалин шилжүүлэх сануулга илгээж байна...');
+  try {
+    await sendSalaryPayReminder();
+  } catch (err) {
+    console.error('Цалин шилжүүлэх сануулга алдаа:', err);
   }
 });
 
