@@ -8,9 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm install       # install dependencies
 npm start         # run production server
 npm run dev       # run with --watch (auto-restart on file changes)
+npm test          # node --test: test/*.test.js
 ```
 
-No test runner or linter is configured. The project uses ES modules (`"type": "module"` in package.json), so all imports use `.js` extensions.
+Tests use Node's built-in runner (no extra dependency); they cover the pure logic in `src/utils/`, `bankParser.js`, `bankCategories.js` and the salary PDF, not Sheets/Discord calls. No linter is configured. The project uses ES modules (`"type": "module"` in package.json), so all imports use `.js` extensions.
 
 ## Architecture
 

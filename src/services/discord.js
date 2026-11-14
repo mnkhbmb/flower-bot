@@ -4,6 +4,8 @@ import { getDailyReport, logAttendance, getSalaryReport, saveHaalt, saveSalaryTo
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, findPerson } from '../config/bankCategories.js';
 import { shopAccounts } from './bankParser.js';
 import { buildSalaryPdf } from './salaryPdf.js';
+import { ubToday, ymd, addDays, salaryPeriodFor } from '../utils/periods.js';
+import { parseRepayText } from '../utils/ledger.js';
 import { readInvoice } from './vision.js';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -1204,24 +1206,6 @@ const POS_BANK = 'ХасБанк';
 const DANS_BANK = 'Хаан банк';
 const posFeePct = () => Number(process.env.POS_FEE_PERCENT ?? 1) || 0;
 
-// Улаанбаатарын өнөөдөр (YYYY-MM-DD) ба тооцоолох туслах
-function ubToday() {
-  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-}
-function ymd(y, m, d) {
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toISOString().slice(0, 10);
-}
-
-// Цалингийн хугацаа: 11 ~ 25 (25-нд олгоно), 26 ~ дараа сарын 10 (10-нд олгоно).
-// Хил давхцахгүй — 10, 25-ны өдөр зөвхөн нэг хугацаанд тоологдоно.
-function salaryPeriodFor(date) {
-  const [y, m, d] = date.split('-').map(Number);
-  if (d >= 11 && d <= 25) return { from: ymd(y, m, 11), to: ymd(y, m, 25) };
-  if (d >= 26) return { from: ymd(y, m, 26), to: ymd(y, m + 1, 10) };
-  return { from: ymd(y, m - 1, 26), to: ymd(y, m, 10) };
-}
-
 // Саяхан дууссан цалингийн хугацаа (11, 26-нд дуудна)
 function lastEndedPeriod() {
   return salaryPeriodFor(addDays(currentPeriodSoFar().from, -1));
@@ -1295,15 +1279,6 @@ async function repayLoan({ name, amount, note }) {
   };
 }
 
-// Reply-ийн бичвэр → { amount, note }: "50000", "50,000 бэлнээр", "57к", "бүгд"
-function parseRepayText(text) {
-  const t = String(text || '').trim();
-  if (/^(бүгд|бүх|bugd|buh)$/i.test(t)) return { amount: 'all', note: '' };
-  const m = t.match(/^(\d{1,3}(?:[,. ]\d{3})+|\d+)\s*([kк])?(?:\s+(.+))?$/is);
-  if (!m) return null;
-  return { amount: Number(m[1].replace(/\D/g, '')) * (m[2] ? 1000 : 1), note: (m[3] || '').trim() };
-}
-
 // Ботын зээлийн мессежид дүн бичиж reply хийвэл буцаалт болгоно. Боловсруулсан бол true.
 async function handleLoanReply(message) {
   const parsed = parseRepayText(message.content);
@@ -1345,10 +1320,6 @@ async function salaryPayments(from, to) {
     paid[key] = (paid[key] || 0) + tx.amount;
   }
   return { owed, paid, unknown };
-}
-
-function addDays(date, n) {
-  return new Date(Date.parse(date + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 }
 
 async function buildReconcileEmbed(from, to) {

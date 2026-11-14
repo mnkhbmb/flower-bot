@@ -2,6 +2,7 @@
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 import { findAliasGroup, NON_FLOWER } from '../config/aliases.js';
+import { zeelAmount, loanBalances, accountBalances } from '../utils/ledger.js';
 
 // Хамгийн их зарагдсан бараа — "Хаалт задаргаа" tab-аас (Төрөл = Зарсан).
 // Янз бүрээр бичсэн товчлолыг alias толиор нэг нэр дор нэгтгэнэ.
@@ -416,13 +417,6 @@ export async function getAdvances(from, to) {
   return result;
 }
 
-// "Зээл" tab-ийн дүн: зээл эерэг, буцаалт сөрөг ("-50,000")
-function zeelAmount(value) {
-  const s = String(value || '');
-  const n = Number(s.replace(/[^\d.]/g, '')) || 0;
-  return /[-(]/.test(s) ? -n : n;
-}
-
 // "Зээл" tab-ийн бүх мөр → [{ date, name, amount, note }] (буцаалт сөрөг дүнтэй)
 export async function getLoanRows() {
   const d = await ensureLoaded();
@@ -442,17 +436,7 @@ export async function getLoanRows() {
 // Цалинтай хүний зээл цалингаас бүтнээрээ хасагддаг тул зөвхөн одоогийн хугацааных (periodFrom-оос)
 // үлдэнэ; цалингаас хасагддаггүй хүнийх буцаатал хэвээр үлдэнэ.
 export async function getLoanBalances(periodFrom, salaried = []) {
-  const onSalary = new Set(salaried.map(n => n.trim().toLowerCase()));
-  const loans = new Map();
-  for (const r of await getLoanRows()) {
-    const key = r.name.toLowerCase();
-    if (onSalary.has(key) && r.date < periodFrom) continue;
-    const loan = loans.get(key) || { name: r.name, balance: 0, onSalary: onSalary.has(key), since: r.date };
-    loan.balance += r.amount;
-    if (r.date < loan.since) loan.since = r.date;
-    loans.set(key, loan);
-  }
-  return [...loans.values()].filter(l => l.balance > 0);
+  return loanBalances(await getLoanRows(), periodFrom, salaried);
 }
 
 // Баглаа текстээс товчлол + тоог задлах
@@ -907,18 +891,7 @@ export async function getAccountBalances() {
   if (!bases.length) return [];
   const sheet = findSheet(d, 'Гүйлгээ');
   const txs = sheet ? (await sheet.getRows()).map(rowToTx) : [];
-  return bases.map(b => {
-    const out = { ...b, balance: b.base, in: 0, out: 0, count: 0, bank: null };
-    for (const tx of txs) {
-      // Цаггүй гүйлгээ тохируулсан өдрөө орсон бол аль хэдийн үлдэгдэлд орсон гэж үзнэ
-      if (txAccountKey(tx) !== b.account || `${tx.date} ${tx.time}` <= b.since) continue;
-      if (tx.txType === 'Орлого') { out.balance += tx.amount; out.in += tx.amount; }
-      else { out.balance -= tx.amount; out.out += tx.amount; }
-      out.count++;
-      if (tx.balance != null) out.bank = { balance: tx.balance, computed: out.balance, date: tx.date, time: tx.time };
-    }
-    return out;
-  });
+  return accountBalances(bases, txs, txAccountKey);
 }
 
 // Банкны харилцагчийн нэр → ажилтан ("Тохиргоо" tab, "harilcagch:ЗОЛЗАЯА" = Амина).
