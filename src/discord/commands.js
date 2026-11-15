@@ -101,4 +101,8 @@ export const commands = [
     .addIntegerOption(o => o.setName('honog').setDescription('Сүүлийн хэдэн хоног (default 30)')
       .setMinValue(1).setMaxValue(365).setRequired(false))
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('toollogo')
+    .setDescription('Агуулахын тооллого: тоолсон тоогоо оруулж бүртгэлтэй тулгах')
+    .toJSON(),
 ];

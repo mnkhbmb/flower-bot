@@ -3,6 +3,7 @@ import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 import { findAliasGroup, NON_FLOWER } from '../config/aliases.js';
 import { zeelAmount, loanBalances, accountBalances } from '../utils/ledger.js';
+import { parseCountText, buildStockCount } from '../utils/stockCount.js';
 
 // Хамгийн их зарагдсан бараа — "Хаалт задаргаа" tab-аас (Төрөл = Зарсан).
 // Янз бүрээр бичсэн товчлолыг alias толиор нэг нэр дор нэгтгэнэ.
@@ -947,4 +948,66 @@ export async function removeZeelByTag(tag) {
   // Доороос нь устгана — дээрээс устгавал доорх мөрийн дугаар шилждэг
   for (const r of rows.reverse()) await r.delete();
   return rows.length;
+}
+
+// ===== Тооллого =====
+// "Тооллого" tab: тооллого бүрийн бараа тус бүр нэг мөр. "Анхны тоо" = тухайн үед
+// "Агуулах"-ын "Тоо" баганад байсан тоо, "Зөрүү" = Тоолсон − Анхны тоо.
+const COUNT_HEADERS = ['Дугаар', 'Огноо', 'Цаг', 'Ажилтан', 'Бараа нэр', 'Анхны тоо', 'Тоолсон', 'Зөрүү', 'Засагдсан', 'Тэмдэглэл'];
+
+// Тоолсон тоог агуулахтай тулгаж "Тооллого" tab-д хадгална (агуулахыг өөрчлөхгүй).
+export async function saveStockCount({ id, date, time, name, text, note = '' }) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Агуулах'];
+  if (!sheet) return null;
+  const rows = await sheet.getRows();
+  const result = buildStockCount(
+    rows.map(r => ({ key: r.rowNumber, ner: String(r.get('Бараа нэр') || '').trim(), too: Number(r.get('Тоо')) || 0 })),
+    parseCountText(text),
+    tovch => matchAguulahRow(rows, tovch)?.rowNumber ?? null,
+  );
+  if (!result.lines.length) return result;
+
+  let log = d.sheetsByTitle['Тооллого'];
+  if (!log) log = await d.addSheet({ title: 'Тооллого', headerValues: COUNT_HEADERS });
+  await log.addRows(result.lines.map(l => ({
+    'Дугаар': id, 'Огноо': date, 'Цаг': time, 'Ажилтан': name, 'Бараа нэр': l.ner,
+    'Анхны тоо': l.before, 'Тоолсон': l.counted, 'Зөрүү': l.diff, 'Засагдсан': '', 'Тэмдэглэл': note,
+  })));
+  return result;
+}
+
+// Тооллогын дугаараар агуулахын "Тоо"-г тоолсон тоогоор солино. Нэг тооллогыг нэг л удаа хэрэглэнэ.
+export async function applyStockCount(id) {
+  const d = await ensureLoaded();
+  const sheet = d.sheetsByTitle['Агуулах'];
+  const log = d.sheetsByTitle['Тооллого'];
+  if (!sheet || !log) return { ok: false, reason: 'missing' };
+
+  const logRows = (await log.getRows()).filter(r => String(r.get('Дугаар') || '').trim() === String(id));
+  if (!logRows.length) return { ok: false, reason: 'notfound' };
+  const pending = logRows.filter(r => !String(r.get('Засагдсан') || '').trim());
+  if (!pending.length) return { ok: false, reason: 'already' };
+
+  const rows = await sheet.getRows();
+  const updates = new Map();
+  const warnings = [];
+  for (const lr of pending) {
+    const ner = String(lr.get('Бараа нэр') || '').trim().toLowerCase();
+    const row = rows.find(r => String(r.get('Бараа нэр') || '').trim().toLowerCase() === ner);
+    if (!row) continue;
+    const too = Number(lr.get('Тоолсон')) || 0;
+    updates.set(row.rowNumber, too);
+    const threshold = Number(row.get('Анхааруулгын хэмжээ')) || 0;
+    if (too <= threshold) warnings.push({ ner: row.get('Бараа нэр'), too, threshold });
+  }
+  await batchSetToo(sheet, updates);
+
+  const colIdx = log.headerValues.indexOf('Засагдсан');
+  if (colIdx !== -1) {
+    await log.loadCells();
+    for (const lr of pending) log.getCell(lr.rowNumber - 1, colIdx).value = 'Тийм';
+    await log.saveUpdatedCells();
+  }
+  return { ok: true, count: updates.size, warnings };
 }

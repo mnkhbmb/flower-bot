@@ -6,6 +6,7 @@ import { handleBankInteraction } from '../discord/bank.js';
 import { handleLoanInteraction, handleLoanReply } from '../discord/loans.js';
 import { handleShopInteraction } from '../discord/shop.js';
 import { handleStockInteraction, handleInvoiceMessage } from '../discord/stock.js';
+import { handleCountInteraction } from '../discord/count.js';
 import { handleSalaryInteraction } from '../discord/salary.js';
 import { handleReconcileInteraction } from '../discord/reconcile.js';
 
@@ -14,6 +15,7 @@ export { notifyNewOrder, notifyWebOrder } from '../discord/orders.js';
 export { notifyTransaction } from '../discord/bank.js';
 export { sendTulgaltReport } from '../discord/reconcile.js';
 export { sendDailyReport, sendHaaltReminder, sendBaraaReminder } from '../discord/shop.js';
+export { sendToollogoReminder } from '../discord/count.js';
 export { sendSalaryReminder, sendSalaryPayReminder } from '../discord/salary.js';
 
 export async function startDiscord() {
@@ -55,7 +57,7 @@ export async function startDiscord() {
   client.on('interactionCreate', async (interaction) => {
     // Модуль бүр өөрийн autocomplete, цэс/товч, modal, командыг хариулна (true = боловсруулсан).
     // Autocomplete: bank, loans өөрийн командыг, salary үлдсэн бүгдийг (tsalin-unelgee) хариулдаг тул salary нь тэдний дараа байна.
-    for (const handle of [handleBankInteraction, handleLoanInteraction, handleShopInteraction, handleStockInteraction, handleSalaryInteraction, handleReconcileInteraction]) {
+    for (const handle of [handleBankInteraction, handleLoanInteraction, handleShopInteraction, handleStockInteraction, handleCountInteraction, handleSalaryInteraction, handleReconcileInteraction]) {
       if (await handle(interaction)) return;
     }
   });

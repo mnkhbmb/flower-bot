@@ -5,7 +5,7 @@ import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { handleMessage, pauseForHuman } from './handlers/orderFlow.js';
-import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendSalaryPayReminder, sendBaraaReminder, sendTulgaltReport } from './services/discord.js';
+import { startDiscord, sendHaaltReminder, sendSalaryReminder, sendSalaryPayReminder, sendBaraaReminder, sendTulgaltReport, sendToollogoReminder } from './services/discord.js';
 import { startGmailPoller } from './services/gmail.js';
 import { startYahooPoller } from './services/yahoo.js';
 import { wasSentByBot } from './services/messenger.js';
@@ -212,5 +212,16 @@ cron.schedule('0 6 * * 1', async () => {
     await sendBaraaReminder();
   } catch (err) {
     console.error('Бараа сануулга алдаа:', err);
+  }
+});
+
+// --- CRON: Даваа гараг бүр 10:00-д тооллогын сануулга ---
+// UTC+8 → 02:00 UTC Даваа = 10:00 Улаанбаатар
+cron.schedule('0 2 * * 1', async () => {
+  console.log('🧮 Тооллогын сануулга илгээж байна...');
+  try {
+    await sendToollogoReminder();
+  } catch (err) {
+    console.error('Тооллогын сануулга алдаа:', err);
   }
 });

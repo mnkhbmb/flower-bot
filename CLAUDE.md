@@ -11,7 +11,7 @@ npm run dev       # run with --watch (auto-restart on file changes)
 npm test          # node --test: test/*.test.js
 ```
 
-Tests use Node's built-in runner (no extra dependency). They cover pure logic only: `src/utils/` (`periods.js`, `ledger.js`), `bankParser.js`, `bankCategories.js` and the salary PDF. Logic that needs testing should live in `src/utils/` (pure functions, no Sheets/Discord/Anthropic calls). No linter is configured. ES modules (`"type": "module"`), so all relative imports use `.js` extensions.
+Tests use Node's built-in runner (no extra dependency). They cover pure logic only: `src/utils/` (`periods.js`, `ledger.js`, `stockCount.js`), `bankParser.js`, `bankCategories.js` and the salary PDF. Logic that needs testing should live in `src/utils/` (pure functions, no Sheets/Discord/Anthropic calls). No linter is configured. ES modules (`"type": "module"`), so all relative imports use `.js` extensions.
 
 ## Architecture
 
@@ -27,9 +27,9 @@ One Node.js process (`src/index.js`): an Express server plus a Discord bot, IMAP
 - **Bank transactions**: `services/mailPoller.js` is a generic read-only IMAP poller (every 2 min; last UID stored in Sheets). `gmail.js` reads bank notifications from a Gmail label (XacBank, where the POS deposits arrive; its details are in a PDF attachment); `yahoo.js` reads Khan Bank notifications from a Yahoo mailbox. `bankParser.js` parses the emails, `config/bankCategories.js` guesses a category, `bankTx.js` stores the transaction, records advances as loans and posts it to Discord with a category select menu.
 - **Discord** (`src/services/discord.js` = entry point and public API; code lives in `src/discord/`):
   - `client.js`: the `client` singleton, `WORKERS`, `DIRECTORS`, `PAY_CATS`, `salaryPeople`, `allPeople`. `commands.js`: slash-command definitions, registered **globally** on every `clientReady`.
-  - Feature modules each export `handleXInteraction(interaction)` returning `true` when handled: `bank.js`, `loans.js`, `shop.js` (daily closing, waste, reports), `stock.js` (warehouse + invoice reader), `salary.js`, `reconcile.js`; `orders.js` holds the order notifications. `discord.js` calls the handlers in order. `salary.js` answers every autocomplete not claimed by `bank.js`/`loans.js`, so it must stay after them.
-  - Import direction (no cycles): `client` ← `orders`, `bank`, `loans`, `shop`, `stock` ← `salary` ← `reconcile`.
-  - Commands: `/report`, `/irts`, `/haalt` (closing modal: cash/account/POS, expenses, bouquet codes; deducts stock), `/horogdol` (waste), `/zarsan` (top sold), `/aguulah`, `/aguulah_nem`, `/aguulah_shine`, `/hansh` (CNY rate for invoices), `/tsalin`, `/tsalin-unelgee` (per-person daily rate), `/zeel`, `/zeel-butsalt`, `/zeel-hynah`, `/dans-uldegdel`, `/tulgalt`, `/guilgee`. Replying to a bot loan message with an amount records a repayment.
+  - Feature modules each export `handleXInteraction(interaction)` returning `true` when handled: `bank.js`, `loans.js`, `shop.js` (daily closing, waste, reports), `stock.js` (warehouse + invoice reader), `count.js` (stock count), `salary.js`, `reconcile.js`; `orders.js` holds the order notifications. `discord.js` calls the handlers in order. `salary.js` answers every autocomplete not claimed by `bank.js`/`loans.js`, so it must stay after them.
+  - Import direction (no cycles): `client` ← `orders`, `bank`, `loans`, `shop`, `stock`, `count` ← `salary` ← `reconcile`.
+  - Commands: `/report`, `/irts`, `/haalt` (closing modal: cash/account/POS, expenses, bouquet codes; deducts stock), `/horogdol` (waste), `/zarsan` (top sold), `/aguulah`, `/aguulah_nem`, `/aguulah_shine`, `/toollogo` (stock count: compares counted numbers with `Агуулах`, a button sets the stock to the counted numbers), `/hansh` (CNY rate for invoices), `/tsalin`, `/tsalin-unelgee` (per-person daily rate), `/zeel`, `/zeel-butsalt`, `/zeel-hynah`, `/dans-uldegdel`, `/tulgalt`, `/guilgee`. Replying to a bot loan message with an amount records a repayment.
 - **Salary**: periods are 11–25 (paid on the 25th) and 26–10 of the next month (paid on the 10th), see `utils/periods.js`. Workers are paid per day of attendance (`Ирц`), at a per-person daily rate from `/tsalin-unelgee` or `DEFAULT_DAILY_RATE` in `sheets.js`; directors get a fixed amount per period (`DIRECTORS`). Loans/advances in the period are deducted. `services/salaryPdf.js` builds the PDF with pdfkit using the DejaVu Sans font (`dejavu-fonts-ttf`), because pdfkit's built-in fonts have no Cyrillic.
 - **Loans** (`/zeel`, `/zeel-butsalt`, `/zeel-hynah`): `Зээл` tab, loans positive, repayments negative. Staff loans are deducted from salary; loans to other people stay open until repaid (`utils/ledger.js`).
 - **Account balances** (`/dans-uldegdel`): a base balance is set by hand and transactions after it are added/subtracted; compared with the balance the bank prints in its emails.
@@ -44,13 +44,14 @@ One Node.js process (`src/index.js`): an Express server plus a Discord bot, IMAP
 | `0 9,12 10,25 * *` | 10th, 25th 17:00, 20:00 | `sendSalaryPayReminder` (only people not yet paid by bank) |
 | `0 2 11,26 * *` | 11th, 26th 10:00 | `sendTulgaltReport` (reconciliation of the period that just ended) |
 | `0 6 * * 1` | Monday 14:00 | `sendBaraaReminder` (#бараа-таталт) |
+| `0 2 * * 1` | Monday 10:00 | `sendToollogoReminder` (#өдрийн-хаалт) |
 
 `sendDailyReport` still exists but is not scheduled; the daily report is available via `/report`.
 
 ### Google Sheet tabs
 
 - Must exist: `Захиалга`, `Ирц`, `Цалин`, `Агуулах`, `Бараа таталт`, `Өдрийн хаалт`, `Хаалт задаргаа` (the last two are matched case-insensitively). Columns are matched by header name; see HANDOVER.md for the column lists.
-- Created automatically when missing: `Тохиргоо` (key/value settings: `yuan_hansh`, `tsalin:<name>`, `uldegdel:<account>`, `harilcagch:<counterparty>`, mail-poller last UIDs), `Зээл`, `Гүйлгээ` (missing columns are appended).
+- Created automatically when missing: `Тохиргоо` (key/value settings: `yuan_hansh`, `tsalin:<name>`, `uldegdel:<account>`, `harilcagch:<counterparty>`, mail-poller last UIDs), `Зээл`, `Тооллого` (one row per counted item: `Анхны тоо` = stock on record at that moment, `Тоолсон`, `Зөрүү`, `Засагдсан`), `Гүйлгээ` (missing columns are appended).
 - `Захиалга` headers: `Захиалгын #`, `Огноо`, `Харилцагч`, `Утас`, `Цэцэг / Баглаа`, `Тоо`, `Нэгж үнэ`, `Хүргэлт эсэх`, `Хаяг`, `Хүргэх огноо`, `Статус`, `Төлбөр`, `Эх сурвалж`, `Тэмдэглэл`.
 
 ## Configuration
