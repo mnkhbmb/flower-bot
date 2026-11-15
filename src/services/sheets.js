@@ -522,13 +522,13 @@ export async function decreaseAguurlah(baglaaText) {
 
 // "Тоо" баганын олон мөрийг НЭГ API дуудлагаар шинэчлэх (мөр бүрд row.save()
 // дуудвал Google-ийн 60 бичилт/мин quota хэтэрч 429 өгдөг)
-async function batchSetToo(sheet, updates) {
+async function batchSetToo(sheet, updates, columns = ['Тоо']) {
   if (updates.size === 0) return;
-  const colIdx = sheet.headerValues.indexOf('Тоо');
-  if (colIdx === -1) return;
+  const cols = columns.map(c => sheet.headerValues.indexOf(c)).filter(i => i !== -1);
+  if (!cols.length || sheet.headerValues.indexOf('Тоо') === -1) return;
   await sheet.loadCells();
   for (const [rowNumber, value] of updates) {
-    sheet.getCell(rowNumber - 1, colIdx).value = value;
+    for (const colIdx of cols) sheet.getCell(rowNumber - 1, colIdx).value = value;
   }
   await sheet.saveUpdatedCells();
 }
@@ -961,9 +961,10 @@ export async function removeZeelByTag(tag) {
 }
 
 // ===== Тооллого =====
-// "Тооллого" tab: тооллого бүрийн бараа тус бүр нэг мөр. "Анхны тоо" = тухайн үед
-// "Агуулах"-ын "Тоо" баганад байсан тоо, "Зөрүү" = Тоолсон − Анхны тоо.
-const COUNT_HEADERS = ['Дугаар', 'Огноо', 'Цаг', 'Ажилтан', 'Бараа нэр', 'Анхны тоо', 'Тоолсон', 'Зөрүү', 'Засагдсан', 'Тэмдэглэл'];
+// "Тооллого" tab: тооллого бүрийн бараа тус бүр нэг мөр. "Өмнөх тоо" = тухайн үед
+// "Агуулах"-ын "Тоо" баганад байсан тоо, "Зөрүү" = Тоолсон − Өмнөх тоо.
+// Тооллогыг хэрэглэхэд тоолсон тоо нь агуулахын шинэ "Анхны тоо" ба "Тоо" болно.
+const COUNT_HEADERS = ['Дугаар', 'Огноо', 'Цаг', 'Ажилтан', 'Бараа нэр', 'Өмнөх тоо', 'Тоолсон', 'Зөрүү', 'Засагдсан', 'Тэмдэглэл'];
 
 // Тоолсон тоог агуулахтай тулгаж "Тооллого" tab-д хадгална (агуулахыг өөрчлөхгүй).
 export async function saveStockCount({ id, date, time, name, text, note = '' }) {
@@ -980,14 +981,16 @@ export async function saveStockCount({ id, date, time, name, text, note = '' }) 
 
   let log = d.sheetsByTitle['Тооллого'];
   if (!log) log = await d.addSheet({ title: 'Тооллого', headerValues: COUNT_HEADERS });
+  else { await log.loadHeaderRow(); await ensureColumns(log, COUNT_HEADERS); }
   await log.addRows(result.lines.map(l => ({
     'Дугаар': id, 'Огноо': date, 'Цаг': time, 'Ажилтан': name, 'Бараа нэр': l.ner,
-    'Анхны тоо': l.before, 'Тоолсон': l.counted, 'Зөрүү': l.diff, 'Засагдсан': '', 'Тэмдэглэл': note,
+    'Өмнөх тоо': l.before, 'Тоолсон': l.counted, 'Зөрүү': l.diff, 'Засагдсан': '', 'Тэмдэглэл': note,
   })));
   return result;
 }
 
-// Тооллогын дугаараар агуулахын "Тоо"-г тоолсон тоогоор солино. Нэг тооллогыг нэг л удаа хэрэглэнэ.
+// Тооллогын дугаараар агуулахын "Анхны тоо" ба "Тоо"-г тоолсон тоогоор солино — тоолсон тоо нь
+// шинэ эхлэл болно. Нэг тооллогыг нэг л удаа хэрэглэнэ.
 export async function applyStockCount(id) {
   const d = await ensureLoaded();
   const sheet = d.sheetsByTitle['Агуулах'];
@@ -1011,7 +1014,7 @@ export async function applyStockCount(id) {
     const threshold = Number(row.get('Анхааруулгын хэмжээ')) || 0;
     if (too <= threshold) warnings.push({ ner: row.get('Бараа нэр'), too, threshold });
   }
-  await batchSetToo(sheet, updates);
+  await batchSetToo(sheet, updates, ['Тоо', 'Анхны тоо']);
 
   const colIdx = log.headerValues.indexOf('Засагдсан');
   if (colIdx !== -1) {

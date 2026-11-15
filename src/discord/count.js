@@ -2,8 +2,8 @@ import { EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRow
 import { client } from './client.js';
 import { saveStockCount, applyStockCount } from '../services/sheets.js';
 
-// Агуулахын тооллого: /toollogo → цонх → бүртгэл дээрх тоотой (анхны тоо) тулгана →
-// "Агуулахыг засах" товчоор агуулахын тоог тоолсон тоогоор солино. Бүгд "Тооллого" tab-д хадгалагдана.
+// Агуулахын тооллого: /toollogo → цонх → бүртгэл дээрх тоотой тулгана →
+// товчоор тоолсон тоог агуулахын шинэ "Анхны тоо" ба "Тоо" болгоно. Бүгд "Тооллого" tab-д хадгалагдана.
 
 function toollogoModal() {
   return new ModalBuilder()
@@ -35,7 +35,7 @@ function countEmbed(name, r, note, text) {
   const off = r.lines.filter(l => l.diff !== 0);
   const same = r.lines.filter(l => l.diff === 0);
   const desc = off.length
-    ? off.map(l => `${l.diff < 0 ? '🔻' : '🔺'} **${l.ner}** — анхны ${l.before} → тоолсон ${l.counted} (**${signed(l.diff)}**)`).join('\n')
+    ? off.map(l => `${l.diff < 0 ? '🔻' : '🔺'} **${l.ner}** — бүртгэлд ${l.before} → тоолсон ${l.counted} (**${signed(l.diff)}**)`).join('\n')
     : '✅ Тоолсон бүх бараа бүртгэлтэй таарч байна.';
   const embed = new EmbedBuilder()
     .setColor(off.length ? 0xE67E22 : 0x34A853)
@@ -104,7 +104,7 @@ export async function handleCountInteraction(interaction) {
         components: changed ? [new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`toollogo_apply:${id}`)
-            .setLabel('Агуулахыг тоолсон тоогоор засах')
+            .setLabel('Тоолсон тоог анхны тоо болгох')
             .setEmoji('✅')
             .setStyle(ButtonStyle.Success)
         )] : [],
@@ -131,7 +131,7 @@ export async function handleCountInteraction(interaction) {
         return true;
       }
       const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x34A853);
-      if (r.ok && !embed.data.fields?.some(f => f.name === '📦 Агуулах засагдлаа')) embed.addFields({ name: '📦 Агуулах засагдлаа', value: `${r.count} барааны тоог тоолсон тоогоор сольсон — ${name}` });
+      if (r.ok && !embed.data.fields?.some(f => f.name === '📦 Агуулах засагдлаа')) embed.addFields({ name: '📦 Агуулах засагдлаа', value: `${r.count} барааны анхны тоо, үлдэгдлийг тоолсон тоогоор тавьсан — ${name}` });
       await interaction.editReply({ embeds: [embed], components: [] });
 
       if (r.ok && r.warnings.length > 0) {
