@@ -22,3 +22,14 @@ export function salaryPeriodFor(date) {
   if (d >= 26) return { from: ymd(y, m, 26), to: ymd(y, m + 1, 10) };
   return { from: ymd(y, m - 1, 26), to: ymd(y, m, 10) };
 }
+
+// Саяхан дууссан цалингийн хугацаа (11, 26-нд дуудна)
+export function lastEndedPeriod(now = Date.now()) {
+  return salaryPeriodFor(addDays(currentPeriodSoFar(now).from, -1));
+}
+
+// Одоо явж буй хугацааны эхнээс өнөөдрийг хүртэл (/tulgalt)
+export function currentPeriodSoFar(now = Date.now()) {
+  const today = ubToday(now);
+  return { from: salaryPeriodFor(today).from, to: today };
+}

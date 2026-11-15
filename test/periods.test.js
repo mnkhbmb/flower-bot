@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { salaryPeriodFor, addDays, ubToday, ymd } from '../src/utils/periods.js';
+import { salaryPeriodFor, addDays, ubToday, ymd, currentPeriodSoFar, lastEndedPeriod } from '../src/utils/periods.js';
 
 test('цалингийн хугацаа: 11~25 ба 26~10', () => {
   assert.deepEqual(salaryPeriodFor('2026-11-10'), { from: '2026-10-26', to: '2026-11-10' });
@@ -36,4 +36,16 @@ test('ymd ба addDays сар дамжина', () => {
   assert.equal(ymd(2026, 13, 10), '2027-01-10');
   assert.equal(ymd(2026, 0, 26), '2025-12-26');
   assert.equal(addDays('2026-03-01', -1), '2026-02-28');
+});
+
+test('одоогийн хугацаа өнөөдрийг хүртэл, саяхан дууссан хугацаа', () => {
+  const now = Date.parse('2026-11-15T03:00:00Z');
+  assert.deepEqual(currentPeriodSoFar(now), { from: '2026-11-11', to: '2026-11-15' });
+  assert.deepEqual(lastEndedPeriod(now), { from: '2026-10-26', to: '2026-11-10' });
+  // 26-ны өглөө (UB) — 11~25 дөнгөж дууссан
+  const day26 = Date.parse('2026-11-25T17:00:00Z');
+  assert.deepEqual(currentPeriodSoFar(day26), { from: '2026-11-26', to: '2026-11-26' });
+  assert.deepEqual(lastEndedPeriod(day26), { from: '2026-11-11', to: '2026-11-25' });
+  // 1-р сарын 11-нд: өмнөх хугацаа он дамжина
+  assert.deepEqual(lastEndedPeriod(Date.parse('2027-01-11T01:00:00Z')), { from: '2026-12-26', to: '2027-01-10' });
 });
