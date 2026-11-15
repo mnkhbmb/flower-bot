@@ -75,9 +75,6 @@ export async function startDiscord() {
     await handleInvoiceMessage(message);
   });
 
-  // Unhandled error-уудыг барих
-  client.on('error', (err) => console.error('Discord client error:', err));
-
   try {
     console.log('🔄 Discord login хийж байна...');
     await client.login(process.env.DISCORD_BOT_TOKEN);

@@ -10,6 +10,7 @@ import { startGmailPoller } from './services/gmail.js';
 import { startYahooPoller } from './services/yahoo.js';
 import { wasSentByBot } from './services/messenger.js';
 import { getTopSold } from './services/sheets.js';
+import { ubToday, addDays } from './utils/periods.js';
 import { handleWebOrder } from './handlers/webOrder.js';
 import { handleWebChat } from './handlers/webChat.js';
 
@@ -19,7 +20,7 @@ const app = express();
 app.set('trust proxy', 1);                 // Railway-ийн proxy-ийн цаана жинхэнэ IP-г авна
 app.use(express.json({ limit: '1mb' }));   // вэб захиалга баглааны зурагтай ирдэг
 
-// --- Эрүүл мэндийн шалгалт (Render-д хэрэгтэй) ---
+// --- Эрүүл мэндийн шалгалт (Railway-д хэрэгтэй) ---
 app.get('/', (req, res) => res.send('🌸 Flower bot ажиллаж байна'));
 
 // --- Пиксел баглааны сайт ---
@@ -42,8 +43,8 @@ app.get('/api/flowers/top', async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   try {
     if (Date.now() - topCache.at > 10 * 60 * 1000) {
-      const to = new Date().toISOString().slice(0, 10);
-      const from = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+      const to = ubToday();
+      const from = addDays(to, -29);
       const r = await getTopSold(from, to);
       topCache = { at: Date.now(), flowers: r.flowers.map(f => f.name) };
     }

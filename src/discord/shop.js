@@ -1,6 +1,7 @@
 import { EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { client } from './client.js';
 import { getDailyReport, saveHaalt, decreaseAguurlah, getTopSold, saveHorogdol, getYuanRate, setSetting } from '../services/sheets.js';
+import { ubToday, addDays } from '../utils/periods.js';
 
 // Өдрийн тайлангийн embed
 function dailyEmbed(r) {
@@ -98,11 +99,11 @@ export async function sendHaaltReminder() {
   });
 }
 
-// Бараа таталтын сануулга — өдөр бүр 14:00-д #бараа-таталт руу.
-// DISCORD_BARAA_ROLE_ID тохируулсан бол тэр role-г mention хийнэ.
+// Бараа таталтын сануулга — Даваа гараг бүр 14:00-д #бараа-таталт руу.
+// DISCORD_BARAA_ROLE_ID тохируулсан бол тэр role-г mention хийнэ, үгүй бол mention-гүй илгээнэ.
 export async function sendBaraaReminder() {
   const channel = await client.channels.fetch(process.env.DISCORD_BARAA_CHANNEL_ID);
-  const roleId = process.env.DISCORD_BARAA_ROLE_ID || '1510417114983432413';
+  const roleId = process.env.DISCORD_BARAA_ROLE_ID;
   await channel.send({
     content: roleId ? `<@&${roleId}> Захирлуудаа` : 'Захирлуудаа',
     allowedMentions: { roles: roleId ? [roleId] : [] },
@@ -389,8 +390,8 @@ export async function handleShopInteraction(interaction) {
     await interaction.deferReply();
     try {
       const days = interaction.options.getInteger('honog') ?? 30;
-      const to = new Date().toISOString().slice(0, 10);
-      const from = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+      const to = ubToday();
+      const from = addDays(to, -(days - 1));
       const r = await getTopSold(from, to);
 
       const embed = topSoldEmbed(r, `🏆 Хамгийн их зарагдсан цэцэг — сүүлийн ${days} хоног`, 15);
