@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCountText, buildStockCount } from '../src/utils/stockCount.js';
+import { parseCountText, buildStockCount, nameMatchScore } from '../src/utils/stockCount.js';
 
 test('тооллогын бичвэр задлах', () => {
   assert.deepEqual(parseCountText('Са-45 Ро-12'), [{ tovch: 'Са', too: 45 }, { tovch: 'Ро', too: 12 }]);
@@ -31,4 +31,15 @@ test('тооллого: анхны тоо, тоолсон, зөрүү', () => {
     unmatched: ['Хх'],
     notCounted: ['Башир'],
   });
+});
+
+test('агуулахын нэрийг ерөнхий нэрээр бүтэн үгээр таних', () => {
+  assert.equal(nameMatchScore('Удвал Chrysanthemum', ['уд', 'удвал']), 2);
+  assert.equal(nameMatchScore('Carola rose-Red', ['сарнай', 'са', 'rose']), 1);
+  assert.equal(nameMatchScore('Oriental Lily White', ['лили', 'lily', 'ли']), 1);
+  assert.equal(nameMatchScore('Зэрлэг Сарнай Pink', ['зэрлэг сарнай']), 2);
+  // Үгийн хэсэг таарах нь тооцогдохгүй, богино хувилбар тооцогдохгүй
+  assert.equal(nameMatchScore('Удваа Peony', ['удвал']), 0);
+  assert.equal(nameMatchScore('Мини Сарнай', ['м', 'ми']), 0);
+  assert.equal(nameMatchScore('', ['сарнай']), 0);
 });

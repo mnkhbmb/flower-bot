@@ -31,7 +31,7 @@ function toollogoModal() {
 const cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 const signed = n => (n > 0 ? `+${n}` : `−${Math.abs(n)}`);
 
-function countEmbed(name, r, note) {
+function countEmbed(name, r, note, text) {
   const off = r.lines.filter(l => l.diff !== 0);
   const same = r.lines.filter(l => l.diff === 0);
   const desc = off.length
@@ -42,8 +42,14 @@ function countEmbed(name, r, note) {
     .setTitle(`🧮 Тооллого — ${name}`)
     .setDescription(cut(desc, 4000))
     .setTimestamp();
+  // Ажилтны яг бичсэн зүйл — буруу танигдсан эсэхийг шалгахад
+  if (text) embed.addFields({ name: '✍️ Оруулсан', value: cut(text.trim(), 1000) });
   if (same.length) embed.addFields({ name: `✅ Таарсан (${same.length})`, value: cut(same.map(l => `${l.ner} ${l.counted}`).join(', '), 1000) });
-  if (r.notCounted.length) embed.addFields({ name: `➖ Тоолоогүй (${r.notCounted.length}) — өөрчлөгдөхгүй`, value: cut(r.notCounted.join(', '), 1000) });
+  // Тоолоогүй бараа цөөн бол нэрээр, олон бол зөвхөн тоогоор
+  if (r.notCounted.length) embed.addFields({
+    name: '➖ Тоолоогүй — өөрчлөгдөхгүй',
+    value: r.notCounted.length <= 15 ? cut(r.notCounted.join(', '), 1000) : `${r.notCounted.length} бараа`,
+  });
   if (r.unmatched.length) embed.addFields({ name: '❓ Танигдаагүй товчлол', value: cut(r.unmatched.join(', '), 1000) });
   if (note) embed.addFields({ name: 'Тэмдэглэл', value: cut(note, 1000) });
   const minus = off.filter(l => l.diff < 0).reduce((s, l) => s + l.diff, 0);
@@ -65,6 +71,9 @@ export async function sendToollogoReminder() {
     ]
   });
 }
+
+// Товчийг давхар дарахад агуулахыг хоёр удаа засахаас сэргийлнэ
+const applying = new Set();
 
 export async function handleCountInteraction(interaction) {
   // Тооллогын цонх илгээгдэхэд
@@ -91,7 +100,7 @@ export async function handleCountInteraction(interaction) {
 
       const changed = r.lines.some(l => l.diff !== 0);
       await interaction.editReply({
-        embeds: [countEmbed(name, r, note)],
+        embeds: [countEmbed(name, r, note, text)],
         components: changed ? [new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`toollogo_apply:${id}`)
@@ -113,13 +122,16 @@ export async function handleCountInteraction(interaction) {
       await interaction.deferUpdate();
       const id = interaction.customId.slice('toollogo_apply:'.length);
       const name = interaction.user.displayName || interaction.user.username;
-      const r = await applyStockCount(id);
+      if (applying.has(id)) return true;
+      applying.add(id);
+      let r;
+      try { r = await applyStockCount(id); } finally { applying.delete(id); }
       if (!r.ok && r.reason !== 'already') {
         await interaction.followUp({ content: '⚠️ Энэ тооллогын бүртгэл олдсонгүй.', ephemeral: true });
         return true;
       }
       const embed = EmbedBuilder.from(interaction.message.embeds[0]).setColor(0x34A853);
-      if (r.ok) embed.addFields({ name: '📦 Агуулах засагдлаа', value: `${r.count} барааны тоог тоолсон тоогоор сольсон — ${name}` });
+      if (r.ok && !embed.data.fields?.some(f => f.name === '📦 Агуулах засагдлаа')) embed.addFields({ name: '📦 Агуулах засагдлаа', value: `${r.count} барааны тоог тоолсон тоогоор сольсон — ${name}` });
       await interaction.editReply({ embeds: [embed], components: [] });
 
       if (r.ok && r.warnings.length > 0) {

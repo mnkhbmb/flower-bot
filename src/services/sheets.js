@@ -3,7 +3,7 @@ import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 import { findAliasGroup, NON_FLOWER } from '../config/aliases.js';
 import { zeelAmount, loanBalances, accountBalances } from '../utils/ledger.js';
-import { parseCountText, buildStockCount } from '../utils/stockCount.js';
+import { parseCountText, buildStockCount, nameMatchScore } from '../utils/stockCount.js';
 
 // Хамгийн их зарагдсан бараа — "Хаалт задаргаа" tab-аас (Төрөл = Зарсан).
 // Янз бүрээр бичсэн товчлолыг alias толиор нэг нэр дор нэгтгэнэ.
@@ -466,7 +466,7 @@ function matchAguulahRow(rows, tovch) {
     for (const a of group.aliases) variants.add(a);
   }
 
-  return rows.find(r => {
+  const exact = rows.find(r => {
     const ner = String(r.get('Бараа нэр') || '').trim().toLowerCase();
     if (variants.has(ner)) return true;
     return String(r.get('Товчлол') || '')
@@ -475,7 +475,17 @@ function matchAguulahRow(rows, tovch) {
       .map(s => s.trim())
       .filter(Boolean)
       .some(x => variants.has(x));
-  }) || null;
+  });
+  if (exact) return exact;
+
+  // Яг таарах мөр байхгүй бол нэр дотор нь ерөнхий нэр бүтэн үгээр орсон мөрийг авна
+  // ("уд" → "Удвал Chrysanthemum"). Нэрийн эхэнд таарсныг илүүд үзнэ.
+  let best = null, bestScore = 0;
+  for (const r of rows) {
+    const score = nameMatchScore(r.get('Бараа нэр'), variants);
+    if (score > bestScore) { best = r; bestScore = score; if (score === 2) break; }
+  }
+  return best;
 }
 
 export async function decreaseAguurlah(baglaaText) {
